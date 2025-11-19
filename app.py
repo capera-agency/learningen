@@ -861,13 +861,64 @@ def create_course():
                 raise
         
         data = request.json
+        
+        # Validazione dei dati obbligatori
+        if not data:
+            return jsonify({'error': 'Nessun dato fornito'}), 400
+        
+        # Verifica campi obbligatori
+        required_fields = ['code', 'name', 'total_hours', 'theory_hours', 'practice_hours']
+        missing_fields = [field for field in required_fields if field not in data or data[field] is None or data[field] == '']
+        
+        if missing_fields:
+            return jsonify({
+                'error': f'Campi obbligatori mancanti: {", ".join(missing_fields)}'
+            }), 400
+        
+        # Validazione valori numerici
+        try:
+            total_hours = int(data['total_hours'])
+            theory_hours = int(data['theory_hours'])
+            practice_hours = int(data['practice_hours'])
+            
+            if total_hours <= 0 or theory_hours < 0 or practice_hours < 0:
+                return jsonify({
+                    'error': 'Le ore devono essere numeri positivi'
+                }), 400
+            
+            if theory_hours + practice_hours > total_hours:
+                return jsonify({
+                    'error': 'La somma delle ore teoriche e pratiche non può superare le ore totali'
+                }), 400
+        except (ValueError, TypeError):
+            return jsonify({
+                'error': 'Le ore devono essere numeri validi'
+            }), 400
+        
+        # Validazione code e name
+        code = data['code'].strip()
+        name = data['name'].strip()
+        
+        if not code:
+            return jsonify({'error': 'Il codice corso non può essere vuoto'}), 400
+        if not name:
+            return jsonify({'error': 'Il nome corso non può essere vuoto'}), 400
+        
+        # Verifica se il codice esiste già
+        existing_course = Course.query.filter_by(code=code).first()
+        if existing_course:
+            return jsonify({
+                'error': f'Un corso con il codice "{code}" esiste già'
+            }), 409
+        
+        # Crea il corso
         course = Course(
-            code=data['code'],
-            name=data['name'],
-            description=data.get('description', ''),
-            total_hours=data['total_hours'],
-            theory_hours=data['theory_hours'],
-            practice_hours=data['practice_hours'],
+            code=code,
+            name=name,
+            description=data.get('description', '').strip(),
+            total_hours=total_hours,
+            theory_hours=theory_hours,
+            practice_hours=practice_hours,
             num_lessons=data.get('num_lessons', 0)
         )
         db.session.add(course)
