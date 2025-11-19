@@ -6746,6 +6746,11 @@ def manifest():
     """Serve il manifest.json per PWA"""
     return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
 
+@app.route('/static/js/service-worker.js')
+def service_worker():
+    """Serve il service worker"""
+    return send_from_directory('static/js', 'service-worker.js', mimetype='application/javascript')
+
 if __name__ == '__main__':
     # Per sviluppo locale, il database è già inizializzato da init_database()
     app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False, use_debugger=True)

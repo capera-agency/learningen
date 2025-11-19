@@ -59,6 +59,9 @@ function formatDateTime(dateString) {
 
 // Carica corsi all'avvio
 document.addEventListener('DOMContentLoaded', async () => {
+    // Inizializza sincronizzazione offline
+    await initOfflineSupport();
+    
     // Carica preferenze prima dei corsi per avere hourlyRate disponibile
     await loadPreferences();
     loadCourses();
@@ -202,6 +205,24 @@ let currentSearchResults = [];
 
 async function loadCourses() {
     try {
+        // Se offline, carica da IndexedDB
+        if (!navigator.onLine && window.offlineSync) {
+            try {
+                const cachedCourses = await window.offlineSync.getCoursesFromDB();
+                if (cachedCourses.length > 0) {
+                    console.log('📦 Corsi caricati da cache offline:', cachedCourses);
+                    isSearchMode = false;
+                    currentSearchResults = [];
+                    displayCourses(cachedCourses);
+                    const badge = document.getElementById('searchResultsBadge');
+                    if (badge) badge.remove();
+                    return;
+                }
+            } catch (dbError) {
+                console.error('Errore caricamento da IndexedDB:', dbError);
+            }
+        }
+        
         const response = await fetch(`${API_BASE}/courses`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -209,6 +230,14 @@ async function loadCourses() {
         const courses = await response.json();
         isSearchMode = false;
         currentSearchResults = [];
+        
+        // Salva corsi in IndexedDB per uso offline
+        if (window.offlineSync && courses.length > 0) {
+            courses.forEach(course => {
+                window.offlineSync.saveCourseToDB(course);
+            });
+        }
+        
         displayCourses(courses);
         
         // Rimuovi badge risultati se presente
@@ -216,6 +245,24 @@ async function loadCourses() {
         if (badge) badge.remove();
     } catch (error) {
         console.error('Errore nel caricamento corsi:', error);
+        
+        // Prova a caricare da IndexedDB se offline
+        if (window.offlineSync) {
+            try {
+                const cachedCourses = await window.offlineSync.getCoursesFromDB();
+                if (cachedCourses.length > 0) {
+                    console.log('📦 Corsi caricati da cache offline:', cachedCourses);
+                    isSearchMode = false;
+                    currentSearchResults = [];
+                    displayCourses(cachedCourses);
+                    showToast('Modalità offline: dati caricati dalla cache', 'info');
+                    return;
+                }
+            } catch (dbError) {
+                console.error('Errore caricamento da IndexedDB:', dbError);
+            }
+        }
+        
         const container = document.getElementById('coursesList');
         container.innerHTML = `<div class="col-12"><div class="alert alert-danger">Errore nel caricamento dei corsi: ${error.message}. <a href="/health" target="_blank">Verifica lo stato del server</a></div></div>`;
     }
@@ -837,8 +884,39 @@ async function openLessonsModal(courseId) {
     const modal = new bootstrap.Modal(document.getElementById('lessonsModal'));
     
     try {
-        const response = await fetch(`${API_BASE}/courses/${courseId}`);
-        const course = await response.json();
+        let course;
+        
+        // Se offline, carica da IndexedDB
+        if (!navigator.onLine && window.offlineSync) {
+            try {
+                const cachedLessons = await window.offlineSync.getLessonsFromDB(courseId);
+                const cachedCourses = await window.offlineSync.getCoursesFromDB();
+                const cachedCourse = cachedCourses.find(c => c.id === courseId);
+                
+                if (cachedCourse) {
+                    course = { ...cachedCourse, lessons: cachedLessons };
+                    console.log('📚 Lezioni caricate da cache offline:', course);
+                }
+            } catch (dbError) {
+                console.error('Errore caricamento lezioni da IndexedDB:', dbError);
+            }
+        }
+        
+        // Se non trovato in cache, carica dal server
+        if (!course) {
+            const response = await fetch(`${API_BASE}/courses/${courseId}`);
+            if (!response.ok) {
+                throw new Error('Errore nel caricamento delle lezioni');
+            }
+            course = await response.json();
+            
+            // Salva lezioni in IndexedDB per uso offline
+            if (window.offlineSync && course.lessons && course.lessons.length > 0) {
+                course.lessons.forEach(lesson => {
+                    window.offlineSync.saveLessonToDB(lesson);
+                });
+            }
+        }
         
         const numLessons = course.num_lessons || 0;
         const actualLessons = course.lessons ? course.lessons.length : 0;
@@ -847,7 +925,7 @@ async function openLessonsModal(courseId) {
             : `Lezioni - ${course.name} (${actualLessons})`;
         
         document.getElementById('lessonsModalTitle').textContent = titleText;
-        displayLessons(course.lessons);
+        displayLessons(course.lessons || []);
         
         // Nascondi il form all'apertura
         document.getElementById('lessonFormContainer').style.display = 'none';
@@ -857,6 +935,22 @@ async function openLessonsModal(courseId) {
         modal.show();
     } catch (error) {
         console.error('Errore:', error);
+        
+        // Prova a caricare da IndexedDB se offline
+        if (window.offlineSync) {
+            try {
+                const cachedLessons = await window.offlineSync.getLessonsFromDB(courseId);
+                if (cachedLessons.length > 0) {
+                    displayLessons(cachedLessons);
+                    showToast('Modalità offline: dati caricati dalla cache', 'info');
+                    modal.show();
+                    return;
+                }
+            } catch (dbError) {
+                console.error('Errore caricamento lezioni da IndexedDB:', dbError);
+            }
+        }
+        
         alert('Errore nel caricamento delle lezioni');
     }
 }
@@ -5269,6 +5363,171 @@ function closeMobileMenu() {
         if (bsCollapse) {
             bsCollapse.hide();
         }
+    }
+}
+
+// ==================== OFFLINE SYNC ====================
+
+// Inizializza supporto offline
+async function initOfflineSupport() {
+    // Registra Service Worker
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.register('/static/js/service-worker.js');
+            console.log('[Offline] Service Worker registrato:', registration.scope);
+            
+            // Aggiorna Service Worker se disponibile
+            registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                newWorker.addEventListener('statechange', () => {
+                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                        console.log('[Offline] Nuovo Service Worker disponibile');
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('[Offline] Errore registrazione Service Worker:', error);
+        }
+    }
+
+    // Inizializza IndexedDB
+    if (window.offlineSync) {
+        try {
+            await window.offlineSync.initDB();
+            console.log('[Offline] IndexedDB inizializzato');
+        } catch (error) {
+            console.error('[Offline] Errore inizializzazione IndexedDB:', error);
+        }
+    }
+
+    // Gestisci eventi online/offline
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    // Aggiorna indicatore stato iniziale
+    updateOnlineStatus();
+}
+
+// Gestisci stato online
+function handleOnline() {
+    console.log('[Offline] Connessione ripristinata');
+    updateOnlineStatus();
+    showSyncIndicator();
+    
+    // Sincronizza operazioni pendenti
+    if (window.offlineSync) {
+        window.offlineSync.syncPendingOperations().then(() => {
+            hideSyncIndicator();
+            showToast('Dati sincronizzati con successo', 'success');
+            // Ricarica i corsi dopo la sincronizzazione
+            loadCourses();
+        }).catch(error => {
+            console.error('[Offline] Errore sincronizzazione:', error);
+            hideSyncIndicator();
+            showToast('Errore durante la sincronizzazione', 'error');
+        });
+    }
+}
+
+// Gestisci stato offline
+function handleOffline() {
+    console.log('[Offline] Connessione persa');
+    updateOnlineStatus();
+    showToast('Modalità offline attiva. Le modifiche verranno sincronizzate quando tornerà la connessione.', 'warning');
+}
+
+// Aggiorna indicatore stato online/offline
+function updateOnlineStatus() {
+    const indicator = document.getElementById('offlineIndicator');
+    if (indicator) {
+        if (navigator.onLine) {
+            indicator.classList.add('d-none');
+        } else {
+            indicator.classList.remove('d-none');
+            indicator.classList.remove('bg-secondary');
+            indicator.classList.add('bg-warning');
+        }
+    }
+}
+
+// Mostra indicatore sincronizzazione
+function showSyncIndicator() {
+    const indicator = document.getElementById('syncIndicator');
+    if (indicator) {
+        indicator.classList.remove('d-none');
+    }
+}
+
+// Nascondi indicatore sincronizzazione
+function hideSyncIndicator() {
+    const indicator = document.getElementById('syncIndicator');
+    if (indicator) {
+        indicator.classList.add('d-none');
+    }
+}
+
+// Wrapper per fetch con gestione offline
+async function fetchWithOffline(url, options = {}) {
+    try {
+        const response = await fetch(url, options);
+        
+        // Se offline e la richiesta fallisce, salva in coda
+        if (!response.ok && !navigator.onLine && options.method && options.method !== 'GET') {
+            await queueOfflineOperation(url, options);
+            return { ok: false, offline: true, queued: true };
+        }
+        
+        return response;
+    } catch (error) {
+        // Se offline, salva in coda
+        if (!navigator.onLine && options.method && options.method !== 'GET') {
+            await queueOfflineOperation(url, options);
+            return { ok: false, offline: true, queued: true };
+        }
+        throw error;
+    }
+}
+
+// Aggiungi operazione alla coda offline
+async function queueOfflineOperation(url, options) {
+    if (!window.offlineSync) return;
+    
+    const urlObj = new URL(url, window.location.origin);
+    let operationType = '';
+    let data = null;
+    
+    // Determina tipo operazione dall'URL
+    if (urlObj.pathname.includes('/courses') && options.method === 'POST') {
+        operationType = 'CREATE_COURSE';
+        data = JSON.parse(options.body || '{}');
+    } else if (urlObj.pathname.includes('/courses') && options.method === 'PUT') {
+        operationType = 'UPDATE_COURSE';
+        data = JSON.parse(options.body || '{}');
+    } else if (urlObj.pathname.includes('/courses') && options.method === 'DELETE') {
+        operationType = 'DELETE_COURSE';
+        const courseId = parseInt(urlObj.pathname.split('/').pop());
+        data = { id: courseId };
+    } else if (urlObj.pathname.includes('/lessons') && options.method === 'POST') {
+        operationType = 'CREATE_LESSON';
+        data = JSON.parse(options.body || '{}');
+    } else if (urlObj.pathname.includes('/lessons') && options.method === 'PUT') {
+        operationType = 'UPDATE_LESSON';
+        data = JSON.parse(options.body || '{}');
+    } else if (urlObj.pathname.includes('/lessons') && options.method === 'DELETE') {
+        operationType = 'DELETE_LESSON';
+        const parts = urlObj.pathname.split('/');
+        const lessonId = parseInt(parts.pop());
+        const courseId = parseInt(parts[parts.length - 2]);
+        data = { id: lessonId, course_id: courseId };
+    }
+    
+    if (operationType) {
+        await window.offlineSync.addPendingOperation({
+            type: operationType,
+            url: url,
+            data: data
+        });
+        console.log('[Offline] Operazione aggiunta alla coda:', operationType);
     }
 }
 

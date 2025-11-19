@@ -253,11 +253,11 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - [x] Ottimizzazioni form e input per mobile (font-size 16px per prevenire zoom iOS)
 - [x] Dashboard responsive (2x2 su mobile)
 - [x] Griglie card corsi ottimizzate (1 colonna su mobile)
-- [ ] Sincronizzazione offline
+- [x] Sincronizzazione offline (Service Worker, IndexedDB, queue operazioni, sync automatica)
 - [ ] Notifiche push mobile
 
 **Priorità:** Bassa  
-**Stato:** ✅ Completato (2025-11-19) - Versione mobile completa implementata
+**Stato:** ✅ Completato (2025-11-19) - Versione mobile completa e sincronizzazione offline implementate
 
 ---
 
@@ -299,6 +299,7 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - ✅ Validazione Contenuti: controllo completezza lezioni, verifica obiettivi/materiali/esercizi, alert per lezioni incomplete, validazione formattazione Markdown
 - ✅ Backup e Restore: tab "Backup" nelle preferenze, creazione backup JSON completo (corsi, lezioni, preferenze), ripristino backup con opzioni selettive, cronologia backup con rotazione automatica, impostazioni backup automatico (frequenza giornaliera/settimanale/mensile, numero backup da mantenere)
 - ✅ Responsività Mobile: stili CSS responsive per modali (modal-dialog, modal-body, modal-footer), ottimizzazione per schermi < 768px e < 576px, tab navigation responsive, form con font-size 16px per prevenire zoom iOS, button groups responsive, PWA base con manifest.json e meta tags iOS, menu hamburger per navigazione mobile, touch-friendly (target minimo 44x44px), dashboard responsive (2x2 su mobile), griglie card corsi ottimizzate (1 colonna su mobile), ottimizzazioni complete per tutti i componenti (tabelle, dropdown, toast, progress bar, spinner, text, lista lezioni, search panel)
+- ✅ Sincronizzazione Offline: Service Worker per cache risorse statiche e API calls (Network First con fallback a cache), IndexedDB per salvare corsi e lezioni localmente, queue per operazioni offline (CREATE/UPDATE/DELETE corsi e lezioni), sincronizzazione automatica quando torna online, indicatore stato online/offline nella navbar, caricamento dati da cache quando offline, toast notifications per stato sincronizzazione
 
 ### In Sviluppo
 - Nessuna al momento
@@ -324,6 +325,7 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - **2025-11-19 19:02**: Implementato Backup e Restore: tab "Backup" nelle preferenze con sezioni "Crea Backup", "Ripristina Backup", "Cronologia Backup" e "Impostazioni Backup Automatico". Endpoint backend `/api/backup/create` per creare backup JSON completo, `/api/backup/restore` per ripristinare con opzioni selettive, `/api/backup/list` per cronologia, `/api/backup/download/<filename>` per download. Rotazione automatica backup basata su preferenze. Interfaccia con pulsante "Indietro" per tornare al tab precedente.
 - **2025-11-19**: Implementata Responsività Mobile e PWA: aggiunti stili CSS responsive per tutte le modali (max-width calc(100% - 1rem) su mobile, flex layout per modal-content, padding ridotti, font-size 16px per form su iOS), manifest.json per PWA con icone e shortcuts, meta tags per iOS (apple-mobile-web-app-capable, mobile-web-app-capable, theme-color), ottimizzazione tab navigation, button groups e form per schermi piccoli. Tutte le modali ora sono fruibili su dispositivi mobili.
 - **2025-11-19**: Implementata Versione Mobile-Optimized Completa: menu hamburger nella navbar con collapse Bootstrap per schermi < 992px, tutti i bottoni e elementi interattivi con target minimo 44x44px per touch-friendly, dashboard cards responsive (2x2 su mobile con testi abbreviati), griglie card corsi ottimizzate (col-12 su mobile, col-sm-6 su tablet), ottimizzazioni complete per form (font-size 16px), tabelle, dropdown, toast, progress bar, spinner, lista lezioni, search panel. Funzione JavaScript `closeMobileMenu()` per chiudere automaticamente il menu dopo click. Tutto il gestionale è ora completamente fruibile e ottimizzato per dispositivi mobili.
+- **2025-11-19**: Implementata Sincronizzazione Offline: Service Worker (`service-worker.js`) per cache risorse statiche (Cache First) e API calls (Network First con fallback), IndexedDB (`offline-sync.js`) con store per corsi, lezioni, operazioni pendenti e preferenze, queue automatica per operazioni CREATE/UPDATE/DELETE quando offline, sincronizzazione automatica quando torna online con retry (max 3 tentativi), indicatori visivi nella navbar (badge offline e sincronizzazione), caricamento dati da cache quando offline, toast notifications per feedback utente. L'applicazione funziona completamente offline e sincronizza automaticamente quando torna la connessione.
 
 ---
 
@@ -340,5 +342,5 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 
 ---
 
-*Ultimo aggiornamento: 2025-11-19 (Versione Mobile-Optimized Completa)*
+*Ultimo aggiornamento: 2025-11-19 (Sincronizzazione Offline)*
 
