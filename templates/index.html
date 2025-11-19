@@ -17,17 +17,21 @@
             <span class="navbar-brand mb-0 h1" style="cursor: pointer;" onclick="showCourses()">
                 <i class="bi bi-book"></i> Gestione Corsi
             </span>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-light" onclick="showDashboard()" title="Dashboard">
-                    <i class="bi bi-speedometer2"></i> Dashboard
-                </button>
-                <button class="btn btn-outline-light" onclick="showTemplatesModal()" title="Libreria Template">
-                    <i class="bi bi-bookmark-star"></i> Template
-                </button>
-                <button class="btn btn-outline-light" onclick="showPreferencesModal()" title="Preferenze">
-                    <i class="bi bi-gear"></i> Preferenze
-                </button>
-            </div>
+               <div class="d-flex gap-2">
+                   <button class="btn btn-outline-light" onclick="showDashboard()" title="Dashboard">
+                       <i class="bi bi-speedometer2"></i> Dashboard
+                   </button>
+                   <button class="btn btn-outline-light" onclick="showTemplatesModal()" title="Libreria Template">
+                       <i class="bi bi-bookmark-star"></i> Template
+                   </button>
+                   <button class="btn btn-outline-light position-relative" onclick="showNotificationsModal()" title="Notifiche" id="notificationsBtn">
+                       <i class="bi bi-bell"></i> Notifiche
+                       <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="notificationsBadge" style="display: none;">0</span>
+                   </button>
+                   <button class="btn btn-outline-light" onclick="showPreferencesModal()" title="Preferenze">
+                       <i class="bi bi-gear"></i> Preferenze
+                   </button>
+               </div>
         </div>
     </nav>
 
@@ -927,6 +931,114 @@
                             <div id="compareVersion2Content" style="max-height: 70vh; overflow-y: auto;"></div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Collaborazione (Note, Commenti, Promemoria) -->
+    <div class="modal fade" id="collaborationModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-chat-dots"></i> Collaborazione
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs mb-3" id="collabTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="notes-tab" data-bs-toggle="tab" data-bs-target="#notes" type="button" role="tab">
+                                <i class="bi bi-sticky"></i> Note
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="comments-tab" data-bs-toggle="tab" data-bs-target="#comments" type="button" role="tab">
+                                <i class="bi bi-chat-left-text"></i> Commenti
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="reminders-tab" data-bs-toggle="tab" data-bs-target="#reminders" type="button" role="tab">
+                                <i class="bi bi-bell"></i> Promemoria
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="collabTabContent">
+                        <!-- Tab Note -->
+                        <div class="tab-pane fade show active" id="notes" role="tabpanel">
+                            <div class="mb-3">
+                                <button class="btn btn-sm btn-success" onclick="showAddNoteForm()">
+                                    <i class="bi bi-plus-circle"></i> Aggiungi Nota
+                                </button>
+                            </div>
+                            <div id="addNoteForm" style="display: none;" class="mb-3 p-3 border rounded">
+                                <h6>Nuova Nota</h6>
+                                <textarea class="form-control mb-2" id="newNoteContent" rows="3" placeholder="Scrivi la tua nota..."></textarea>
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="newNotePrivate" checked>
+                                    <label class="form-check-label" for="newNotePrivate">Nota privata</label>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-primary" onclick="saveNote()">Salva</button>
+                                    <button class="btn btn-sm btn-secondary" onclick="cancelAddNote()">Annulla</button>
+                                </div>
+                            </div>
+                            <div id="notesList"></div>
+                        </div>
+                        <!-- Tab Commenti -->
+                        <div class="tab-pane fade" id="comments" role="tabpanel">
+                            <div class="mb-3">
+                                <h6>Nuovo Commento</h6>
+                                <input type="text" class="form-control mb-2" id="commentAuthor" placeholder="Il tuo nome" value="Utente">
+                                <textarea class="form-control mb-2" id="newCommentContent" rows="3" placeholder="Scrivi un commento..."></textarea>
+                                <button class="btn btn-sm btn-primary" onclick="saveComment()">Invia Commento</button>
+                            </div>
+                            <div id="commentsList"></div>
+                        </div>
+                        <!-- Tab Promemoria -->
+                        <div class="tab-pane fade" id="reminders" role="tabpanel">
+                            <div class="mb-3">
+                                <button class="btn btn-sm btn-success" onclick="showAddReminderForm()">
+                                    <i class="bi bi-plus-circle"></i> Aggiungi Promemoria
+                                </button>
+                            </div>
+                            <div id="addReminderForm" style="display: none;" class="mb-3 p-3 border rounded">
+                                <h6>Nuovo Promemoria</h6>
+                                <input type="text" class="form-control mb-2" id="newReminderTitle" placeholder="Titolo promemoria">
+                                <textarea class="form-control mb-2" id="newReminderDescription" rows="2" placeholder="Descrizione (opzionale)"></textarea>
+                                <input type="datetime-local" class="form-control mb-2" id="newReminderDate">
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-primary" onclick="saveReminder()">Salva</button>
+                                    <button class="btn btn-sm btn-secondary" onclick="cancelAddReminder()">Annulla</button>
+                                </div>
+                            </div>
+                            <div id="remindersList"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Notifiche -->
+    <div class="modal fade" id="notificationsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-bell"></i> Notifiche
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 d-flex justify-content-between align-items-center">
+                        <span id="notificationsCount"></span>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="markAllNotificationsRead()">
+                            <i class="bi bi-check-all"></i> Segna tutte come lette
+                        </button>
+                    </div>
+                    <div id="notificationsList"></div>
                 </div>
             </div>
         </div>

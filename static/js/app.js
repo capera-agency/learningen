@@ -26,6 +26,37 @@ function formatDate(dateString) {
     }
 }
 
+// Funzione per formattare data e ora in formato italiano (con correzione fuso orario)
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    try {
+        // Se la stringa termina con 'Z' o ha il formato ISO, gestiscila come UTC
+        let date;
+        if (typeof dateString === 'string' && (dateString.endsWith('Z') || dateString.includes('T'))) {
+            // Parse come UTC e poi converti al fuso orario locale
+            date = new Date(dateString);
+        } else {
+            date = new Date(dateString);
+        }
+        
+        if (isNaN(date.getTime())) {
+            return dateString;
+        }
+        
+        // Usa toLocaleString con fuso orario italiano
+        return date.toLocaleString('it-IT', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Europe/Rome'
+        });
+    } catch (e) {
+        return dateString;
+    }
+}
+
 // Carica corsi all'avvio
 document.addEventListener('DOMContentLoaded', async () => {
     // Carica preferenze prima dei corsi per avere hourlyRate disponibile
@@ -36,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupHoursRecalculation();
     
     // Rimuovi backdrop se rimane dopo la chiusura delle modali
-    const modals = ['courseModal', 'lessonsModal', 'lessonPreviewModal', 'questionsModal', 'finalReportModal', 'trainAIModal', 'preferencesModal'];
+    const modals = ['courseModal', 'lessonsModal', 'lessonPreviewModal', 'questionsModal', 'finalReportModal', 'trainAIModal', 'preferencesModal', 'notificationsModal', 'collaborationModal', 'versionHistoryModal', 'versionCompareModal'];
     modals.forEach(modalId => {
         const modalElement = document.getElementById(modalId);
         if (modalElement) {
@@ -907,6 +938,9 @@ function displayLessons(lessons) {
                     <button class="btn btn-sm btn-outline-secondary version-history-btn" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Cronologia Versioni">
                         <i class="bi bi-clock-history"></i>
                     </button>
+                    <button class="btn btn-sm btn-outline-info collaboration-btn" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Note, Commenti e Promemoria">
+                        <i class="bi bi-chat-dots"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-danger delete-lesson-btn" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Elimina">
                         <i class="bi bi-trash"></i>
                     </button>
@@ -996,6 +1030,15 @@ function displayLessons(lessons) {
             showVersionHistory(courseId, lessonId);
         });
     });
+    
+    // Aggiungi event listener per i pulsanti Collaborazione
+    container.querySelectorAll('.collaboration-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const lessonId = parseInt(this.getAttribute('data-lesson-id'));
+            const courseId = parseInt(this.getAttribute('data-course-id'));
+            showCollaborationModal(courseId, lessonId);
+        });
+    });
 }
 
 async function updateLessonsOrder(courseId, newOrder) {
@@ -1056,7 +1099,7 @@ async function showVersionHistory(courseId, lessonId) {
                 <div class="card mb-3">
                     <div class="card-body">
                         <h6 class="card-title">${data.current_version.title}</h6>
-                        <small class="text-muted">Ultimo aggiornamento: ${data.current_version.updated_at ? new Date(data.current_version.updated_at).toLocaleString('it-IT') : 'N/A'}</small>
+                        <small class="text-muted">Ultimo aggiornamento: ${formatDateTime(data.current_version.updated_at)}</small>
                     </div>
                 </div>
             </div>
@@ -1068,7 +1111,7 @@ async function showVersionHistory(courseId, lessonId) {
         } else {
             html += '<div class="list-group">';
             data.versions.forEach(version => {
-                const date = version.created_at ? new Date(version.created_at).toLocaleString('it-IT') : 'N/A';
+                const date = formatDateTime(version.created_at);
                 html += `
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-start">
@@ -1126,7 +1169,7 @@ async function viewVersion(courseId, lessonId, versionId) {
             <div class="card">
                 <div class="card-header">
                     <h5>Versione ${version.version_number}: ${version.title}</h5>
-                    <small class="text-muted">${version.created_at ? new Date(version.created_at).toLocaleString('it-IT') : 'N/A'}</small>
+                    <small class="text-muted">${formatDateTime(version.created_at)}</small>
                 </div>
                 <div class="card-body">
                     ${version.comment ? `<div class="alert alert-info mb-3"><strong>Commento:</strong> ${version.comment}</div>` : ''}
@@ -1261,6 +1304,760 @@ async function restoreVersion(courseId, lessonId, versionId, versionTitle) {
         showToast('Errore nel ripristino della versione: ' + error.message, 'error');
     }
 }
+
+// ==================== FUNZIONI COLLABORAZIONE ====================
+
+let currentCollaborationLessonId = null;
+let currentCollaborationCourseId = null;
+
+async function showCollaborationModal(courseId, lessonId) {
+    currentCollaborationCourseId = courseId;
+    currentCollaborationLessonId = lessonId;
+    
+    const modal = new bootstrap.Modal(document.getElementById('collaborationModal'));
+    modal.show();
+    
+    // Carica contenuti iniziali
+    await loadNotes(courseId, lessonId);
+    await loadComments(courseId, lessonId);
+    await loadReminders(courseId, lessonId);
+    
+    // Ascolta cambio tab
+    document.getElementById('collabTabs').addEventListener('shown.bs.tab', function(event) {
+        const targetTab = event.target.getAttribute('data-bs-target');
+        if (targetTab === '#notes') {
+            loadNotes(courseId, lessonId);
+        } else if (targetTab === '#comments') {
+            loadComments(courseId, lessonId);
+        } else if (targetTab === '#reminders') {
+            loadReminders(courseId, lessonId);
+        }
+    });
+}
+
+async function loadNotes(courseId, lessonId) {
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/notes`);
+        if (!response.ok) throw new Error('Errore nel caricamento delle note');
+        
+        const notes = await response.json();
+        const container = document.getElementById('notesList');
+        
+        if (notes.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessuna nota disponibile.</div>';
+            return;
+        }
+        
+        container.innerHTML = notes.map(note => {
+            const date = formatDateTime(note.created_at);
+            const updated = note.updated_at && note.updated_at !== note.created_at 
+                ? ` (modificata: ${formatDateTime(note.updated_at)})` : '';
+            return `
+                <div class="card mb-2">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <p class="mb-1">${note.content}</p>
+                                <small class="text-muted">
+                                    ${note.is_private ? '<i class="bi bi-lock"></i> Privata' : '<i class="bi bi-unlock"></i> Pubblica'} • 
+                                    ${note.created_by || 'Utente'} • ${date}${updated}
+                                </small>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" onclick="editNote(${courseId}, ${lessonId}, ${note.id}, '${note.content.replace(/'/g, "\\'")}')">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteNote(${courseId}, ${lessonId}, ${note.id})">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Errore:', error);
+        document.getElementById('notesList').innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`;
+    }
+}
+
+function showAddNoteForm() {
+    document.getElementById('addNoteForm').style.display = 'block';
+    document.getElementById('newNoteContent').focus();
+}
+
+function cancelAddNote() {
+    document.getElementById('addNoteForm').style.display = 'none';
+    document.getElementById('newNoteContent').value = '';
+    document.getElementById('newNotePrivate').checked = true;
+}
+
+async function saveNote() {
+    const content = document.getElementById('newNoteContent').value.trim();
+    if (!content) {
+        alert('Inserisci il contenuto della nota');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentCollaborationCourseId}/lessons/${currentCollaborationLessonId}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: content,
+                is_private: document.getElementById('newNotePrivate').checked,
+                created_by: 'Utente'
+            })
+        });
+        
+        if (!response.ok) throw new Error('Errore nel salvataggio');
+        
+        showToast('Nota creata con successo', 'success');
+        cancelAddNote();
+        await loadNotes(currentCollaborationCourseId, currentCollaborationLessonId);
+        await checkNotifications(); // Aggiorna notifiche
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function editNote(courseId, lessonId, noteId, currentContent) {
+    const newContent = prompt('Modifica nota:', currentContent);
+    if (!newContent || newContent === currentContent) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/notes/${noteId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: newContent })
+        });
+        
+        if (!response.ok) throw new Error('Errore nell\'aggiornamento');
+        
+        showToast('Nota aggiornata', 'success');
+        await loadNotes(courseId, lessonId);
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function deleteNote(courseId, lessonId, noteId) {
+    if (!confirm('Eliminare questa nota?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/notes/${noteId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Errore nell\'eliminazione');
+        
+        showToast('Nota eliminata', 'success');
+        await loadNotes(courseId, lessonId);
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function loadComments(courseId, lessonId) {
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/comments`);
+        if (!response.ok) throw new Error('Errore nel caricamento dei commenti');
+        
+        const comments = await response.json();
+        const container = document.getElementById('commentsList');
+        
+        if (comments.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessun commento. Inizia la conversazione!</div>';
+            return;
+        }
+        
+        function renderComment(comment, level = 0) {
+            const date = formatDateTime(comment.created_at);
+            const margin = level > 0 ? `ms-${level * 3}` : '';
+            const safeAuthor = (comment.author || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            let html = `
+                <div class="card mb-2 ${margin}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <strong>${comment.author}</strong>
+                                <small class="text-muted ms-2">${date}</small>
+                                <p class="mb-1 mt-2">${comment.content}</p>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-secondary reply-comment-btn" 
+                                        data-comment-id="${comment.id}" 
+                                        data-comment-author="${safeAuthor}">
+                                    <i class="bi bi-reply"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-comment-btn" 
+                                        data-course-id="${courseId}" 
+                                        data-lesson-id="${lessonId}" 
+                                        data-comment-id="${comment.id}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            if (comment.replies && comment.replies.length > 0) {
+                html += comment.replies.map(reply => renderComment(reply, level + 1)).join('');
+            }
+            
+            return html;
+        }
+        
+        container.innerHTML = comments.map(c => renderComment(c)).join('');
+        
+        // Aggiungi event listeners per i pulsanti
+        container.querySelectorAll('.reply-comment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const commentId = parseInt(this.getAttribute('data-comment-id'));
+                const authorName = this.getAttribute('data-comment-author');
+                replyToComment(commentId, authorName);
+            });
+        });
+        
+        container.querySelectorAll('.delete-comment-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const courseId = parseInt(this.getAttribute('data-course-id'));
+                const lessonId = parseInt(this.getAttribute('data-lesson-id'));
+                const commentId = parseInt(this.getAttribute('data-comment-id'));
+                deleteComment(courseId, lessonId, commentId);
+            });
+        });
+        
+        // Aggiungi form risposta se necessario
+        if (document.getElementById('replyForm')) {
+            document.getElementById('replyForm').remove();
+        }
+    } catch (error) {
+        console.error('Errore:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`;
+    }
+}
+
+function replyToComment(parentId, authorName) {
+    const replyForm = document.createElement('div');
+    replyForm.id = 'replyForm';
+    replyForm.className = 'card mb-2 ms-3';
+    replyForm.innerHTML = `
+        <div class="card-body">
+            <h6>Rispondi a ${authorName}</h6>
+            <input type="text" class="form-control mb-2" id="replyAuthor" placeholder="Il tuo nome" value="Utente">
+            <textarea class="form-control mb-2" id="replyContent" rows="2" placeholder="Scrivi una risposta..."></textarea>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" onclick="saveReply(${currentCollaborationCourseId}, ${currentCollaborationLessonId}, ${parentId})">Invia</button>
+                <button class="btn btn-sm btn-secondary" onclick="document.getElementById('replyForm').remove()">Annulla</button>
+            </div>
+        </div>
+    `;
+    
+    const commentsList = document.getElementById('commentsList');
+    commentsList.appendChild(replyForm);
+    document.getElementById('replyContent').focus();
+}
+
+async function saveComment() {
+    const content = document.getElementById('newCommentContent').value.trim();
+    const author = document.getElementById('commentAuthor').value.trim() || 'Utente';
+    
+    if (!content) {
+        alert('Inserisci un commento');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentCollaborationCourseId}/lessons/${currentCollaborationLessonId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, author })
+        });
+        
+        if (!response.ok) throw new Error('Errore nel salvataggio');
+        
+        showToast('Commento pubblicato', 'success');
+        document.getElementById('newCommentContent').value = '';
+        await loadComments(currentCollaborationCourseId, currentCollaborationLessonId);
+        await checkNotifications();
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function saveReply(courseId, lessonId, parentId) {
+    const content = document.getElementById('replyContent').value.trim();
+    const author = document.getElementById('replyAuthor').value.trim() || 'Utente';
+    
+    if (!content) {
+        alert('Inserisci una risposta');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content, author, parent_id: parentId })
+        });
+        
+        if (!response.ok) throw new Error('Errore nel salvataggio');
+        
+        showToast('Risposta pubblicata', 'success');
+        document.getElementById('replyForm').remove();
+        await loadComments(courseId, lessonId);
+        await checkNotifications();
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function deleteComment(courseId, lessonId, commentId) {
+    if (!confirm('Eliminare questo commento?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/comments/${commentId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Errore nell\'eliminazione');
+        
+        showToast('Commento eliminato', 'success');
+        await loadComments(courseId, lessonId);
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function loadReminders(courseId, lessonId) {
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/reminders`);
+        if (!response.ok) throw new Error('Errore nel caricamento dei promemoria');
+        
+        const reminders = await response.json();
+        const container = document.getElementById('remindersList');
+        
+        if (reminders.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessun promemoria.</div>';
+            return;
+        }
+        
+        container.innerHTML = reminders.map(reminder => {
+            const date = formatDateTime(reminder.reminder_date);
+            const isPast = reminder.reminder_date ? new Date(reminder.reminder_date) < new Date() : false;
+            const completedClass = reminder.is_completed ? 'text-decoration-line-through text-muted' : '';
+            const pastClass = isPast && !reminder.is_completed ? 'border-warning' : '';
+            
+            return `
+                <div class="card mb-2 ${pastClass}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="form-check">
+                                    <input class="form-check-input toggle-reminder-checkbox" 
+                                           type="checkbox" 
+                                           ${reminder.is_completed ? 'checked' : ''} 
+                                           data-course-id="${courseId}" 
+                                           data-lesson-id="${lessonId}" 
+                                           data-reminder-id="${reminder.id}">
+                                    <label class="form-check-label ${completedClass}">
+                                        <strong>${reminder.title}</strong>
+                                    </label>
+                                </div>
+                                ${reminder.description ? `<p class="mb-1 mt-2 ${completedClass}">${reminder.description}</p>` : ''}
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar"></i> ${date} • ${reminder.created_by || 'Utente'}
+                                    ${isPast && !reminder.is_completed ? ' <span class="badge bg-warning">Scaduto</span>' : ''}
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger delete-reminder-btn" 
+                                    data-course-id="${courseId}" 
+                                    data-lesson-id="${lessonId}" 
+                                    data-reminder-id="${reminder.id}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // Aggiungi event listeners per i checkbox e i pulsanti
+        container.querySelectorAll('.toggle-reminder-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const courseId = parseInt(this.getAttribute('data-course-id'));
+                const lessonId = parseInt(this.getAttribute('data-lesson-id'));
+                const reminderId = parseInt(this.getAttribute('data-reminder-id'));
+                const isChecked = this.checked;
+                toggleReminder(courseId, lessonId, reminderId, isChecked);
+            });
+        });
+        
+        container.querySelectorAll('.delete-reminder-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const courseId = parseInt(this.getAttribute('data-course-id'));
+                const lessonId = parseInt(this.getAttribute('data-lesson-id'));
+                const reminderId = parseInt(this.getAttribute('data-reminder-id'));
+                deleteReminder(courseId, lessonId, reminderId);
+            });
+        });
+    } catch (error) {
+        console.error('Errore:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`;
+    }
+}
+
+function showAddReminderForm() {
+    document.getElementById('addReminderForm').style.display = 'block';
+    // Imposta data di default a domani
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('newReminderDate').value = tomorrow.toISOString().slice(0, 16);
+    document.getElementById('newReminderTitle').focus();
+}
+
+function cancelAddReminder() {
+    document.getElementById('addReminderForm').style.display = 'none';
+    document.getElementById('newReminderTitle').value = '';
+    document.getElementById('newReminderDescription').value = '';
+}
+
+async function saveReminder() {
+    const title = document.getElementById('newReminderTitle').value.trim();
+    const description = document.getElementById('newReminderDescription').value.trim();
+    const date = document.getElementById('newReminderDate').value;
+    
+    if (!title || !date) {
+        alert('Inserisci titolo e data');
+        return;
+    }
+    
+    try {
+        const reminderDate = new Date(date).toISOString();
+        const response = await fetch(`${API_BASE}/courses/${currentCollaborationCourseId}/lessons/${currentCollaborationLessonId}/reminders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title: title,
+                description: description,
+                reminder_date: reminderDate,
+                created_by: 'Utente'
+            })
+        });
+        
+        if (!response.ok) throw new Error('Errore nel salvataggio');
+        
+        showToast('Promemoria creato', 'success');
+        cancelAddReminder();
+        await loadReminders(currentCollaborationCourseId, currentCollaborationLessonId);
+        await checkNotifications();
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function toggleReminder(courseId, lessonId, reminderId, isCompleted) {
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/reminders/${reminderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_completed: isCompleted })
+        });
+        
+        if (!response.ok) throw new Error('Errore nell\'aggiornamento');
+        
+        await loadReminders(courseId, lessonId);
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function deleteReminder(courseId, lessonId, reminderId) {
+    if (!confirm('Eliminare questo promemoria?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/reminders/${reminderId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Errore nell\'eliminazione');
+        
+        showToast('Promemoria eliminato', 'success');
+        await loadReminders(courseId, lessonId);
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function showNotificationsModal() {
+    const modal = new bootstrap.Modal(document.getElementById('notificationsModal'));
+    modal.show();
+    await loadNotifications();
+}
+
+async function loadNotifications() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications?unread_only=false`);
+        if (!response.ok) throw new Error('Errore nel caricamento');
+        
+        const notifications = await response.json();
+        const container = document.getElementById('notificationsList');
+        const countEl = document.getElementById('notificationsCount');
+        
+        const unreadCount = notifications.filter(n => !n.is_read).length;
+        countEl.textContent = `${notifications.length} notifiche (${unreadCount} non lette)`;
+        
+        if (notifications.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessuna notifica.</div>';
+            return;
+        }
+        
+        container.innerHTML = notifications.map(notif => {
+            const date = formatDateTime(notif.created_at);
+            const readClass = notif.is_read ? '' : 'border-primary';
+            const iconClass = {
+                'comment': 'bi-chat-left-text',
+                'reminder': 'bi-bell',
+                'note': 'bi-sticky',
+                'version': 'bi-clock-history'
+            }[notif.type] || 'bi-info-circle';
+            
+            // Crea link alla lezione/corso se disponibile
+            let linkHtml = '';
+            if (notif.lesson_id && notif.course_id) {
+                const safeType = (notif.type || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                linkHtml = `
+                    <a href="#" class="btn btn-sm btn-outline-info me-2 go-to-notification-btn" 
+                       data-course-id="${notif.course_id}" 
+                       data-lesson-id="${notif.lesson_id}" 
+                       data-notification-type="${safeType}">
+                        <i class="bi bi-arrow-right-circle"></i> Vai alla Lezione
+                    </a>
+                `;
+            } else if (notif.course_id) {
+                linkHtml = `
+                    <a href="#" class="btn btn-sm btn-outline-info me-2 go-to-course-btn" 
+                       data-course-id="${notif.course_id}">
+                        <i class="bi bi-arrow-right-circle"></i> Vai al Corso
+                    </a>
+                `;
+            }
+            
+            return `
+                <div class="card mb-2 ${readClass}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    <i class="bi ${iconClass}"></i> ${notif.title}
+                                </h6>
+                                <p class="mb-1">${notif.message}</p>
+                                <small class="text-muted">${date}</small>
+                                ${linkHtml}
+                            </div>
+                            <div class="btn-group" role="group">
+                                ${!notif.is_read ? `
+                                    <button class="btn btn-sm btn-outline-primary mark-notification-read-btn" 
+                                            data-notification-id="${notif.id}" 
+                                            title="Segna come letta">
+                                        <i class="bi bi-check"></i>
+                                    </button>
+                                ` : ''}
+                                <button class="btn btn-sm btn-outline-danger delete-notification-btn" 
+                                        data-notification-id="${notif.id}" 
+                                        title="Elimina">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // Aggiungi event listeners per i pulsanti delle notifiche
+        container.querySelectorAll('.go-to-notification-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Rimuovi il focus prima di chiudere il modal
+                this.blur();
+                const courseId = parseInt(this.getAttribute('data-course-id'));
+                const lessonId = parseInt(this.getAttribute('data-lesson-id'));
+                const notificationType = this.getAttribute('data-notification-type');
+                // Usa setTimeout per assicurarsi che blur() sia completato
+                setTimeout(() => {
+                    goToNotification(courseId, lessonId, notificationType);
+                }, 10);
+            });
+        });
+        
+        container.querySelectorAll('.go-to-course-btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Rimuovi il focus prima di chiudere il modal
+                this.blur();
+                const courseId = parseInt(this.getAttribute('data-course-id'));
+                // Usa setTimeout per assicurarsi che blur() sia completato
+                setTimeout(() => {
+                    goToCourse(courseId);
+                }, 10);
+            });
+        });
+        
+        container.querySelectorAll('.mark-notification-read-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const notificationId = parseInt(this.getAttribute('data-notification-id'));
+                markNotificationRead(notificationId);
+            });
+        });
+        
+        container.querySelectorAll('.delete-notification-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const notificationId = parseInt(this.getAttribute('data-notification-id'));
+                deleteNotification(notificationId);
+            });
+        });
+    } catch (error) {
+        console.error('Errore:', error);
+        document.getElementById('notificationsList').innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`;
+    }
+}
+
+async function markNotificationRead(notificationId) {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/${notificationId}/read`, {
+            method: 'PUT'
+        });
+        
+        if (!response.ok) throw new Error('Errore');
+        
+        await loadNotifications();
+        await checkNotifications(); // Aggiorna badge
+    } catch (error) {
+        console.error('Errore:', error);
+    }
+}
+
+async function markAllNotificationsRead() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/read-all`, {
+            method: 'PUT'
+        });
+        
+        if (!response.ok) throw new Error('Errore');
+        
+        showToast('Tutte le notifiche segnate come lette', 'success');
+        await loadNotifications();
+        await checkNotifications();
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function deleteNotification(notificationId) {
+    if (!confirm('Eliminare questa notifica?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/notifications/${notificationId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Errore nell\'eliminazione');
+        
+        showToast('Notifica eliminata', 'success');
+        await loadNotifications();
+        await checkNotifications(); // Aggiorna badge
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+function goToNotification(courseId, lessonId, notificationType) {
+    // Chiudi il modal delle notifiche rimuovendo prima il focus
+    const notificationsModalEl = document.getElementById('notificationsModal');
+    const notificationsModal = bootstrap.Modal.getInstance(notificationsModalEl);
+    if (notificationsModal) {
+        // Assicurati che non ci sia focus attivo
+        const activeElement = document.activeElement;
+        if (activeElement && notificationsModalEl.contains(activeElement)) {
+            activeElement.blur();
+        }
+        notificationsModal.hide();
+    }
+    
+    // Apri il modal delle lezioni
+    openLessonsModal(courseId).then(() => {
+        // Se la notifica è relativa a collaborazione, apri anche il modal collaborazione
+        if (notificationType === 'comment' || notificationType === 'note' || notificationType === 'reminder') {
+            setTimeout(() => {
+                showCollaborationModal(courseId, lessonId);
+                // Cambia al tab appropriato
+                setTimeout(() => {
+                    if (notificationType === 'comment') {
+                        document.getElementById('comments-tab').click();
+                    } else if (notificationType === 'note') {
+                        document.getElementById('notes-tab').click();
+                    } else if (notificationType === 'reminder') {
+                        document.getElementById('reminders-tab').click();
+                    }
+                }, 300);
+            }, 500);
+        }
+    });
+}
+
+function goToCourse(courseId) {
+    // Chiudi il modal delle notifiche rimuovendo prima il focus
+    const notificationsModalEl = document.getElementById('notificationsModal');
+    const notificationsModal = bootstrap.Modal.getInstance(notificationsModalEl);
+    if (notificationsModal) {
+        // Assicurati che non ci sia focus attivo
+        const activeElement = document.activeElement;
+        if (activeElement && notificationsModalEl.contains(activeElement)) {
+            activeElement.blur();
+        }
+        notificationsModal.hide();
+    }
+    
+    // Mostra i corsi (la funzione showCourses() dovrebbe già esistere)
+    showCourses();
+}
+
+async function checkNotifications() {
+    try {
+        const response = await fetch(`${API_BASE}/notifications?unread_only=true`);
+        if (!response.ok) return;
+        
+        const notifications = await response.json();
+        const badge = document.getElementById('notificationsBadge');
+        
+        if (notifications.length > 0) {
+            badge.textContent = notifications.length;
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Errore nel controllo notifiche:', error);
+    }
+}
+
+// Controlla notifiche ogni 30 secondi
+setInterval(checkNotifications, 30000);
 
 function setupHoursRecalculation() {
     // Funzione per ricalcolare le ore totali

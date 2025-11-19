@@ -73,13 +73,13 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 ## 💬 Collaborazione
 
 ### Note e Commenti
-- [ ] Note private per lezioni
-- [ ] Commenti collaborativi
-- [ ] Promemoria per revisioni
-- [ ] Sistema di notifiche
+- [x] Note private per lezioni
+- [x] Commenti collaborativi
+- [x] Promemoria per revisioni
+- [x] Sistema di notifiche
 
 **Priorità:** Media  
-**Stato:** Proposta
+**Stato:** ✅ Completato (2025-01-XX)
 
 ---
 

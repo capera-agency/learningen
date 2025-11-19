@@ -143,6 +143,58 @@ class LessonVersion(db.Model):
     
     lesson = db.relationship('Lesson', backref='versions')
 
+class LessonNote(db.Model):
+    """Note private per lezioni"""
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    is_private = db.Column(db.Boolean, default=True)  # True per note private
+    created_by = db.Column(db.String(100))  # Utente che ha creato la nota
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    lesson = db.relationship('Lesson', backref='notes')
+
+class LessonComment(db.Model):
+    """Commenti collaborativi per lezioni"""
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    author = db.Column(db.String(100), nullable=False)  # Nome autore commento
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    parent_id = db.Column(db.Integer, db.ForeignKey('lesson_comment.id'), nullable=True)  # Per commenti annidati
+    
+    lesson = db.relationship('Lesson', backref='comments')
+    parent = db.relationship('LessonComment', remote_side=[id], backref='replies')
+
+class LessonReminder(db.Model):
+    """Promemoria per revisioni delle lezioni"""
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    reminder_date = db.Column(db.DateTime, nullable=False)  # Data/ora promemoria
+    is_completed = db.Column(db.Boolean, default=False)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    lesson = db.relationship('Lesson', backref='reminders')
+
+class Notification(db.Model):
+    """Sistema di notifiche"""
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=True)
+    type = db.Column(db.String(50), nullable=False)  # 'comment', 'reminder', 'note', 'version', etc.
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    lesson = db.relationship('Lesson', backref='notifications')
+    course = db.relationship('Course', backref='notifications')
+
 # Creare directory per i corsi
 os.makedirs(app.config['COURSES_DIR'], exist_ok=True)
 os.makedirs(app.config['MD_SOURCE_DIR'], exist_ok=True)
@@ -313,6 +365,87 @@ def init_database():
                     logger.info("   ✓ Tabella lesson_version creata")
                 except Exception as e:
                     logger.info(f"   Info lesson_version creation: {e}")
+            
+            # Migrazioni per tabelle collaborazione
+            if 'lesson_note' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS lesson_note (
+                            id INTEGER PRIMARY KEY,
+                            lesson_id INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            is_private BOOLEAN DEFAULT 1,
+                            created_by VARCHAR(100),
+                            created_at DATETIME,
+                            updated_at DATETIME,
+                            FOREIGN KEY (lesson_id) REFERENCES lesson(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella lesson_note creata")
+                except Exception as e:
+                    logger.info(f"   Info lesson_note creation: {e}")
+            
+            if 'lesson_comment' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS lesson_comment (
+                            id INTEGER PRIMARY KEY,
+                            lesson_id INTEGER NOT NULL,
+                            content TEXT NOT NULL,
+                            author VARCHAR(100) NOT NULL,
+                            created_at DATETIME,
+                            updated_at DATETIME,
+                            parent_id INTEGER,
+                            FOREIGN KEY (lesson_id) REFERENCES lesson(id),
+                            FOREIGN KEY (parent_id) REFERENCES lesson_comment(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella lesson_comment creata")
+                except Exception as e:
+                    logger.info(f"   Info lesson_comment creation: {e}")
+            
+            if 'lesson_reminder' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS lesson_reminder (
+                            id INTEGER PRIMARY KEY,
+                            lesson_id INTEGER NOT NULL,
+                            title VARCHAR(200) NOT NULL,
+                            description TEXT,
+                            reminder_date DATETIME NOT NULL,
+                            is_completed BOOLEAN DEFAULT 0,
+                            created_by VARCHAR(100),
+                            created_at DATETIME,
+                            FOREIGN KEY (lesson_id) REFERENCES lesson(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella lesson_reminder creata")
+                except Exception as e:
+                    logger.info(f"   Info lesson_reminder creation: {e}")
+            
+            if 'notification' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS notification (
+                            id INTEGER PRIMARY KEY,
+                            lesson_id INTEGER,
+                            course_id INTEGER,
+                            type VARCHAR(50) NOT NULL,
+                            title VARCHAR(200) NOT NULL,
+                            message TEXT NOT NULL,
+                            is_read BOOLEAN DEFAULT 0,
+                            created_at DATETIME,
+                            FOREIGN KEY (lesson_id) REFERENCES lesson(id),
+                            FOREIGN KEY (course_id) REFERENCES course(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella notification creata")
+                except Exception as e:
+                    logger.info(f"   Info notification creation: {e}")
             
             # Test query per verificare che funzioni
             try:
@@ -1315,6 +1448,286 @@ def restore_lesson_version(course_id, lesson_id, version_id):
     
     db.session.commit()
     return jsonify({'message': f'Lezione ripristinata alla versione {version.version_number}'}), 200
+
+# ==================== API COLLABORAZIONE ====================
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/notes', methods=['GET'])
+def get_lesson_notes(course_id, lesson_id):
+    """Ottiene tutte le note di una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    notes = LessonNote.query.filter_by(lesson_id=lesson_id).order_by(LessonNote.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': n.id,
+        'content': n.content,
+        'is_private': n.is_private,
+        'created_by': n.created_by,
+        'created_at': n.created_at.isoformat() if n.created_at else None,
+        'updated_at': n.updated_at.isoformat() if n.updated_at else None
+    } for n in notes]), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/notes', methods=['POST'])
+def create_lesson_note(course_id, lesson_id):
+    """Crea una nuova nota per una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    data = request.json
+    
+    is_private = data.get('is_private', True)
+    
+    note = LessonNote(
+        lesson_id=lesson_id,
+        content=data.get('content', ''),
+        is_private=is_private,
+        created_by=data.get('created_by', 'Utente')
+    )
+    db.session.add(note)
+    db.session.commit()
+    
+    # Crea notifica solo se la nota NON è privata
+    if not is_private:
+        notification = Notification(
+            lesson_id=lesson_id,
+            course_id=course_id,
+            type='note',
+            title='Nuova nota aggiunta',
+            message=f'Una nuova nota pubblica è stata aggiunta alla lezione "{lesson.title}"'
+        )
+        db.session.add(notification)
+        db.session.commit()
+    
+    return jsonify({
+        'id': note.id,
+        'message': 'Nota creata con successo'
+    }), 201
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/notes/<int:note_id>', methods=['PUT'])
+def update_lesson_note(course_id, lesson_id, note_id):
+    """Aggiorna una nota"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    note = LessonNote.query.filter_by(id=note_id, lesson_id=lesson_id).first_or_404()
+    data = request.json
+    
+    note.content = data.get('content', note.content)
+    note.is_private = data.get('is_private', note.is_private)
+    note.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({'message': 'Nota aggiornata con successo'}), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/notes/<int:note_id>', methods=['DELETE'])
+def delete_lesson_note(course_id, lesson_id, note_id):
+    """Elimina una nota"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    note = LessonNote.query.filter_by(id=note_id, lesson_id=lesson_id).first_or_404()
+    db.session.delete(note)
+    db.session.commit()
+    return jsonify({'message': 'Nota eliminata con successo'}), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/comments', methods=['GET'])
+def get_lesson_comments(course_id, lesson_id):
+    """Ottiene tutti i commenti di una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    comments = LessonComment.query.filter_by(lesson_id=lesson_id, parent_id=None).order_by(LessonComment.created_at.desc()).all()
+    
+    def serialize_comment(comment):
+        return {
+            'id': comment.id,
+            'content': comment.content,
+            'author': comment.author,
+            'created_at': comment.created_at.isoformat() if comment.created_at else None,
+            'updated_at': comment.updated_at.isoformat() if comment.updated_at else None,
+            'replies': [serialize_comment(reply) for reply in comment.replies]
+        }
+    
+    return jsonify([serialize_comment(c) for c in comments]), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/comments', methods=['POST'])
+def create_lesson_comment(course_id, lesson_id):
+    """Crea un nuovo commento per una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    data = request.json
+    
+    comment = LessonComment(
+        lesson_id=lesson_id,
+        content=data.get('content', ''),
+        author=data.get('author', 'Utente'),
+        parent_id=data.get('parent_id')
+    )
+    db.session.add(comment)
+    db.session.commit()
+    
+    # Crea notifica
+    notification = Notification(
+        lesson_id=lesson_id,
+        course_id=course_id,
+        type='comment',
+        title='Nuovo commento',
+        message=f'{comment.author} ha commentato la lezione "{lesson.title}"'
+    )
+    db.session.add(notification)
+    db.session.commit()
+    
+    return jsonify({
+        'id': comment.id,
+        'message': 'Commento creato con successo'
+    }), 201
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/comments/<int:comment_id>', methods=['PUT'])
+def update_lesson_comment(course_id, lesson_id, comment_id):
+    """Aggiorna un commento"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    comment = LessonComment.query.filter_by(id=comment_id, lesson_id=lesson_id).first_or_404()
+    data = request.json
+    
+    comment.content = data.get('content', comment.content)
+    comment.updated_at = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({'message': 'Commento aggiornato con successo'}), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/comments/<int:comment_id>', methods=['DELETE'])
+def delete_lesson_comment(course_id, lesson_id, comment_id):
+    """Elimina un commento"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    comment = LessonComment.query.filter_by(id=comment_id, lesson_id=lesson_id).first_or_404()
+    db.session.delete(comment)
+    db.session.commit()
+    return jsonify({'message': 'Commento eliminato con successo'}), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/reminders', methods=['GET'])
+def get_lesson_reminders(course_id, lesson_id):
+    """Ottiene tutti i promemoria di una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    reminders = LessonReminder.query.filter_by(lesson_id=lesson_id).order_by(LessonReminder.reminder_date.asc()).all()
+    
+    return jsonify([{
+        'id': r.id,
+        'title': r.title,
+        'description': r.description,
+        'reminder_date': r.reminder_date.isoformat() if r.reminder_date else None,
+        'is_completed': r.is_completed,
+        'created_by': r.created_by,
+        'created_at': r.created_at.isoformat() if r.created_at else None
+    } for r in reminders]), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/reminders', methods=['POST'])
+def create_lesson_reminder(course_id, lesson_id):
+    """Crea un nuovo promemoria per una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    data = request.json
+    
+    reminder_date = None
+    if data.get('reminder_date'):
+        try:
+            reminder_date = datetime.fromisoformat(data['reminder_date'].replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            try:
+                reminder_date = datetime.strptime(data['reminder_date'], '%Y-%m-%dT%H:%M:%S')
+            except (ValueError, TypeError):
+                pass
+    
+    reminder = LessonReminder(
+        lesson_id=lesson_id,
+        title=data.get('title', ''),
+        description=data.get('description', ''),
+        reminder_date=reminder_date or datetime.utcnow(),
+        created_by=data.get('created_by', 'Utente')
+    )
+    db.session.add(reminder)
+    db.session.commit()
+    
+    # Crea notifica
+    notification = Notification(
+        lesson_id=lesson_id,
+        course_id=course_id,
+        type='reminder',
+        title='Nuovo promemoria',
+        message=f'Promemoria creato per la lezione "{lesson.title}": {reminder.title}'
+    )
+    db.session.add(notification)
+    db.session.commit()
+    
+    return jsonify({
+        'id': reminder.id,
+        'message': 'Promemoria creato con successo'
+    }), 201
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/reminders/<int:reminder_id>', methods=['PUT'])
+def update_lesson_reminder(course_id, lesson_id, reminder_id):
+    """Aggiorna un promemoria"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    reminder = LessonReminder.query.filter_by(id=reminder_id, lesson_id=lesson_id).first_or_404()
+    data = request.json
+    
+    reminder.title = data.get('title', reminder.title)
+    reminder.description = data.get('description', reminder.description)
+    reminder.is_completed = data.get('is_completed', reminder.is_completed)
+    
+    if data.get('reminder_date'):
+        try:
+            reminder.reminder_date = datetime.fromisoformat(data['reminder_date'].replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            try:
+                reminder.reminder_date = datetime.strptime(data['reminder_date'], '%Y-%m-%dT%H:%M:%S')
+            except (ValueError, TypeError):
+                pass
+    
+    db.session.commit()
+    return jsonify({'message': 'Promemoria aggiornato con successo'}), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/reminders/<int:reminder_id>', methods=['DELETE'])
+def delete_lesson_reminder(course_id, lesson_id, reminder_id):
+    """Elimina un promemoria"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    reminder = LessonReminder.query.filter_by(id=reminder_id, lesson_id=lesson_id).first_or_404()
+    db.session.delete(reminder)
+    db.session.commit()
+    return jsonify({'message': 'Promemoria eliminato con successo'}), 200
+
+@app.route('/api/notifications', methods=['GET'])
+def get_notifications():
+    """Ottiene tutte le notifiche non lette"""
+    unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+    
+    query = Notification.query
+    if unread_only:
+        query = query.filter_by(is_read=False)
+    
+    notifications = query.order_by(Notification.created_at.desc()).limit(50).all()
+    
+    return jsonify([{
+        'id': n.id,
+        'lesson_id': n.lesson_id,
+        'course_id': n.course_id,
+        'type': n.type,
+        'title': n.title,
+        'message': n.message,
+        'is_read': n.is_read,
+        'created_at': n.created_at.isoformat() if n.created_at else None
+    } for n in notifications]), 200
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
+def mark_notification_read(notification_id):
+    """Segna una notifica come letta"""
+    notification = Notification.query.get_or_404(notification_id)
+    notification.is_read = True
+    db.session.commit()
+    return jsonify({'message': 'Notifica segnata come letta'}), 200
+
+@app.route('/api/notifications/read-all', methods=['PUT'])
+def mark_all_notifications_read():
+    """Segna tutte le notifiche come lette"""
+    Notification.query.update({'is_read': True})
+    db.session.commit()
+    return jsonify({'message': 'Tutte le notifiche segnate come lette'}), 200
+
+@app.route('/api/notifications/<int:notification_id>', methods=['DELETE'])
+def delete_notification(notification_id):
+    """Elimina una notifica"""
+    notification = Notification.query.get_or_404(notification_id)
+    db.session.delete(notification)
+    db.session.commit()
+    return jsonify({'message': 'Notifica eliminata con successo'}), 200
 
 @app.route('/api/courses/<int:course_id>/lessons/generate-objectives', methods=['POST'])
 def generate_lesson_objectives(course_id):
