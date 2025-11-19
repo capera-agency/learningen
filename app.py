@@ -207,6 +207,16 @@ class AIAnalysis(db.Model):
     
     course = db.relationship('Course', backref='ai_analyses')
 
+class ContentValidation(db.Model):
+    """Validazioni contenuti salvate per i corsi"""
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    validation_results = db.Column(db.Text, nullable=False)  # JSON con risultati validazione
+    statistics = db.Column(db.Text)  # JSON con statistiche (complete, incomplete, errors)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    course = db.relationship('Course', backref='content_validations')
+
 # Creare directory per i corsi
 os.makedirs(app.config['COURSES_DIR'], exist_ok=True)
 os.makedirs(app.config['MD_SOURCE_DIR'], exist_ok=True)
@@ -478,6 +488,24 @@ def init_database():
                     logger.info("   ✓ Tabella ai_analysis creata")
                 except Exception as e:
                     logger.info(f"   Info ai_analysis creation: {e}")
+            
+            # Migrazione per content_validation
+            if 'content_validation' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS content_validation (
+                            id INTEGER PRIMARY KEY,
+                            course_id INTEGER NOT NULL,
+                            validation_results TEXT NOT NULL,
+                            statistics TEXT,
+                            created_at DATETIME,
+                            FOREIGN KEY (course_id) REFERENCES course(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella content_validation creata")
+                except Exception as e:
+                    logger.info(f"   Info content_validation creation: {e}")
             
             # Test query per verificare che funzioni
             try:
@@ -5159,6 +5187,322 @@ def export_saved_ai_analysis(course_id, analysis_id, format_type):
         import traceback
         logging.error(f'Errore durante l\'esportazione analisi salvata: {e}\n{traceback.format_exc()}')
         return jsonify({'error': f'Errore durante l\'esportazione: {str(e)}'}), 500
+
+@app.route('/api/courses/<int:course_id>/content-validations', methods=['GET'])
+def get_content_validations(course_id):
+    """Recupera tutte le validazioni salvate per un corso"""
+    course = Course.query.get_or_404(course_id)
+    
+    validations = ContentValidation.query.filter_by(course_id=course_id).order_by(ContentValidation.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': v.id,
+        'created_at': v.created_at.isoformat(),
+        'created_at_formatted': v.created_at.strftime('%d/%m/%Y alle %H:%M'),
+        'statistics': json.loads(v.statistics) if v.statistics else {}
+    } for v in validations])
+
+@app.route('/api/courses/<int:course_id>/content-validations', methods=['POST'])
+def save_content_validation(course_id):
+    """Salva una validazione contenuti"""
+    course = Course.query.get_or_404(course_id)
+    data = request.json
+    
+    validation = ContentValidation(
+        course_id=course_id,
+        validation_results=json.dumps(data.get('results', [])),
+        statistics=json.dumps(data.get('statistics', {}))
+    )
+    db.session.add(validation)
+    db.session.commit()
+    
+    return jsonify({
+        'id': validation.id,
+        'message': 'Validazione salvata con successo',
+        'created_at': validation.created_at.isoformat()
+    }), 201
+
+@app.route('/api/courses/<int:course_id>/content-validations/<int:validation_id>', methods=['GET'])
+def get_content_validation(course_id, validation_id):
+    """Recupera una specifica validazione"""
+    validation = ContentValidation.query.filter_by(id=validation_id, course_id=course_id).first_or_404()
+    
+    return jsonify({
+        'id': validation.id,
+        'results': json.loads(validation.validation_results),
+        'statistics': json.loads(validation.statistics) if validation.statistics else {},
+        'created_at': validation.created_at.isoformat(),
+        'created_at_formatted': validation.created_at.strftime('%d/%m/%Y alle %H:%M')
+    })
+
+@app.route('/api/backup/create', methods=['POST'])
+def create_backup():
+    """Crea un backup completo di tutti i dati (corsi, lezioni, preferenze)"""
+    try:
+        from datetime import datetime
+        import shutil
+        
+        # Crea directory backup se non esiste
+        backup_dir = os.path.join(os.getcwd(), 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Raccogli tutti i dati
+        courses = Course.query.all()
+        preferences = Preference.query.all()
+        
+        backup_data = {
+            'version': '1.0',
+            'created_at': datetime.utcnow().isoformat(),
+            'courses': [],
+            'preferences': []
+        }
+        
+        # Esporta corsi con tutte le lezioni
+        for course in courses:
+            course_data = {
+                'id': course.id,
+                'code': course.code,
+                'name': course.name,
+                'description': course.description,
+                'total_hours': course.total_hours,
+                'theory_hours': course.theory_hours,
+                'practice_hours': course.practice_hours,
+                'num_lessons': course.num_lessons,
+                'created_at': course.created_at.isoformat() if course.created_at else None,
+                'export_count': course.export_count or 0,
+                'lessons': []
+            }
+            
+            for lesson in course.lessons:
+                lesson_data = {
+                    'id': lesson.id,
+                    'title': lesson.title,
+                    'description': lesson.description,
+                    'lesson_type': lesson.lesson_type,
+                    'duration_hours': lesson.duration_hours,
+                    'order': lesson.order,
+                    'content': lesson.content,
+                    'objectives': json.loads(lesson.objectives) if lesson.objectives else [],
+                    'materials': json.loads(lesson.materials) if lesson.materials else [],
+                    'exercises': json.loads(lesson.exercises) if lesson.exercises else [],
+                    'lesson_date': lesson.lesson_date.isoformat() if lesson.lesson_date else None,
+                    'created_at': lesson.created_at.isoformat() if lesson.created_at else None,
+                    'updated_at': lesson.updated_at.isoformat() if lesson.updated_at else None,
+                    'modification_count': lesson.modification_count or 0
+                }
+                course_data['lessons'].append(lesson_data)
+            
+            backup_data['courses'].append(course_data)
+        
+        # Esporta preferenze
+        for pref in preferences:
+            backup_data['preferences'].append({
+                'key': pref.key,
+                'value': pref.value,
+                'updated_at': pref.updated_at.isoformat() if pref.updated_at else None
+            })
+        
+        # Salva backup come file JSON
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        filename = f'backup_{timestamp}.json'
+        filepath = os.path.join(backup_dir, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(backup_data, f, indent=2, ensure_ascii=False)
+        
+        # Rotazione backup (mantieni solo gli ultimi N backup)
+        backup_retention = int(get_preference_value('backupRetention', 10))
+        backup_files = sorted([f for f in os.listdir(backup_dir) if f.startswith('backup_') and f.endswith('.json')], reverse=True)
+        
+        if len(backup_files) > backup_retention:
+            for old_backup in backup_files[backup_retention:]:
+                try:
+                    os.remove(os.path.join(backup_dir, old_backup))
+                except:
+                    pass
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'filepath': filepath,
+            'created_at': backup_data['created_at'],
+            'courses_count': len(backup_data['courses']),
+            'preferences_count': len(backup_data['preferences'])
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        logger.error(f'Errore durante la creazione del backup: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante la creazione del backup: {str(e)}'}), 500
+
+@app.route('/api/backup/download/<filename>', methods=['GET'])
+def download_backup(filename):
+    """Scarica un file di backup"""
+    try:
+        backup_dir = os.path.join(os.getcwd(), 'backups')
+        filepath = os.path.join(backup_dir, filename)
+        
+        if not os.path.exists(filepath) or not filename.startswith('backup_'):
+            return jsonify({'error': 'File non trovato'}), 404
+        
+        return send_file(filepath, as_attachment=True, download_name=filename)
+    except Exception as e:
+        logger.error(f'Errore durante il download del backup: {e}')
+        return jsonify({'error': f'Errore durante il download: {str(e)}'}), 500
+
+@app.route('/api/backup/list', methods=['GET'])
+def list_backups():
+    """Lista tutti i backup disponibili"""
+    try:
+        backup_dir = os.path.join(os.getcwd(), 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        backups = []
+        for filename in os.listdir(backup_dir):
+            if filename.startswith('backup_') and filename.endswith('.json'):
+                filepath = os.path.join(backup_dir, filename)
+                stat = os.stat(filepath)
+                
+                # Prova a leggere i metadati dal file
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        created_at = data.get('created_at', '')
+                        courses_count = len(data.get('courses', []))
+                except:
+                    created_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
+                    courses_count = 0
+                
+                backups.append({
+                    'filename': filename,
+                    'created_at': created_at,
+                    'size': stat.st_size,
+                    'courses_count': courses_count,
+                    'formatted_date': datetime.fromtimestamp(stat.st_mtime).strftime('%d/%m/%Y alle %H:%M')
+                })
+        
+        # Ordina per data (più recenti prima)
+        backups.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        return jsonify(backups), 200
+    except Exception as e:
+        logger.error(f'Errore durante il listing dei backup: {e}')
+        return jsonify({'error': f'Errore durante il listing: {str(e)}'}), 500
+
+@app.route('/api/backup/restore', methods=['POST'])
+def restore_backup():
+    """Ripristina un backup da file JSON"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'Nessun file fornito'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'File non selezionato'}), 400
+        
+        if not file.filename.endswith('.json'):
+            return jsonify({'error': 'Il file deve essere in formato JSON'}), 400
+        
+        # Leggi il contenuto del file
+        content = file.read().decode('utf-8')
+        backup_data = json.loads(content)
+        
+        # Verifica versione
+        if backup_data.get('version') != '1.0':
+            return jsonify({'error': 'Versione backup non supportata'}), 400
+        
+        # Opzioni di restore
+        restore_options = request.form.get('options', '{}')
+        options = json.loads(restore_options) if restore_options else {}
+        restore_courses = options.get('restore_courses', True)
+        restore_preferences = options.get('restore_preferences', True)
+        selected_course_ids = options.get('selected_course_ids', [])  # Lista ID corsi da ripristinare (se vuota, tutti)
+        
+        restored_count = {'courses': 0, 'lessons': 0, 'preferences': 0}
+        
+        if restore_courses:
+            # Ripristina corsi
+            for course_data in backup_data.get('courses', []):
+                # Se sono specificati corsi selettivi, salta quelli non selezionati
+                if selected_course_ids and course_data['id'] not in selected_course_ids:
+                    continue
+                
+                # Cerca corso esistente per codice
+                existing_course = Course.query.filter_by(code=course_data['code']).first()
+                is_existing = existing_course is not None
+                
+                if existing_course:
+                    # Aggiorna corso esistente
+                    existing_course.name = course_data['name']
+                    existing_course.description = course_data.get('description')
+                    existing_course.total_hours = course_data['total_hours']
+                    existing_course.theory_hours = course_data['theory_hours']
+                    existing_course.practice_hours = course_data['practice_hours']
+                    existing_course.num_lessons = course_data.get('num_lessons', 0)
+                    course = existing_course
+                else:
+                    # Crea nuovo corso
+                    course = Course(
+                        code=course_data['code'],
+                        name=course_data['name'],
+                        description=course_data.get('description'),
+                        total_hours=course_data['total_hours'],
+                        theory_hours=course_data['theory_hours'],
+                        practice_hours=course_data['practice_hours'],
+                        num_lessons=course_data.get('num_lessons', 0)
+                    )
+                    db.session.add(course)
+                    db.session.flush()  # Per ottenere l'ID
+                
+                # Elimina lezioni esistenti se aggiorniamo
+                if is_existing:
+                    Lesson.query.filter_by(course_id=course.id).delete()
+                
+                # Ripristina lezioni
+                for lesson_data in course_data.get('lessons', []):
+                    lesson = Lesson(
+                        course_id=course.id,
+                        title=lesson_data['title'],
+                        description=lesson_data.get('description'),
+                        lesson_type=lesson_data['lesson_type'],
+                        duration_hours=lesson_data['duration_hours'],
+                        order=lesson_data['order'],
+                        content=lesson_data.get('content'),
+                        objectives=json.dumps(lesson_data.get('objectives', [])),
+                        materials=json.dumps(lesson_data.get('materials', [])),
+                        exercises=json.dumps(lesson_data.get('exercises', [])),
+                        lesson_date=datetime.fromisoformat(lesson_data['lesson_date']) if lesson_data.get('lesson_date') else None,
+                        modification_count=lesson_data.get('modification_count', 0)
+                    )
+                    db.session.add(lesson)
+                    restored_count['lessons'] += 1
+                
+                restored_count['courses'] += 1
+        
+        if restore_preferences:
+            # Ripristina preferenze
+            for pref_data in backup_data.get('preferences', []):
+                existing_pref = Preference.query.filter_by(key=pref_data['key']).first()
+                if existing_pref:
+                    existing_pref.value = pref_data['value']
+                else:
+                    pref = Preference(key=pref_data['key'], value=pref_data['value'])
+                    db.session.add(pref)
+                restored_count['preferences'] += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'restored': restored_count,
+            'message': f'Backup ripristinato: {restored_count["courses"]} corsi, {restored_count["lessons"]} lezioni, {restored_count["preferences"]} preferenze'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        logger.error(f'Errore durante il ripristino del backup: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante il ripristino: {str(e)}'}), 500
 
 @app.route('/api/courses/<int:course_id>/import-md', methods=['POST'])
 def import_lessons_from_md(course_id):

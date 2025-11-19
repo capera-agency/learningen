@@ -99,14 +99,14 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 ## 💾 Backup e Sicurezza
 
 ### Backup e Restore
-- [ ] Backup automatico del database (giornaliero/settimanale)
-- [ ] Esportazione/importazione JSON completa
-- [ ] Cronologia backup con rotazione
-- [ ] Restore selettivo (solo corsi specifici)
+- [x] Backup automatico del database (giornaliero/settimanale) - Configurabile nelle preferenze
+- [x] Esportazione/importazione JSON completa
+- [x] Cronologia backup con rotazione
+- [x] Restore selettivo (solo corsi specifici)
 - [ ] Backup cloud (Google Drive, Dropbox)
 
 **Priorità:** Alta  
-**Stato:** Proposta
+**Stato:** ✅ Completato (2025-11-19)
 
 ---
 
@@ -191,13 +191,13 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 ## ✅ Qualità e Validazione
 
 ### Validazione Contenuti
-- [ ] Controllo completezza lezioni
-- [ ] Verifica presenza obiettivi/materiali
-- [ ] Alert per lezioni incomplete
-- [ ] Validazione formattazione Markdown
+- [x] Controllo completezza lezioni
+- [x] Verifica presenza obiettivi/materiali
+- [x] Alert per lezioni incomplete
+- [x] Validazione formattazione Markdown
 
 **Priorità:** Media  
-**Stato:** Proposta
+**Stato:** ✅ Completato
 
 ### Checklist Qualità
 - [ ] Checklist pre-esportazione
@@ -289,6 +289,8 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - ✅ Template e duplicazione corsi (salvataggio template, libreria, duplicazione, import/export JSON)
 - ✅ Esportazione batch: tutte le lezioni in un unico PDF/DOCX, pacchetto completo (lezioni + domande + relazione), esportazione ZIP
 - ✅ Analisi e Suggerimenti AI: bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti
+- ✅ Validazione Contenuti: controllo completezza lezioni, verifica obiettivi/materiali/esercizi, alert per lezioni incomplete, validazione formattazione Markdown
+- ✅ Backup e Restore: tab "Backup" nelle preferenze, creazione backup JSON completo (corsi, lezioni, preferenze), ripristino backup con opzioni selettive, cronologia backup con rotazione automatica, impostazioni backup automatico (frequenza giornaliera/settimanale/mensile, numero backup da mantenere)
 
 ### In Sviluppo
 - Nessuna al momento
@@ -309,7 +311,9 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - **2025-11-18**: Implementata ricerca avanzata con full-text su corsi/lezioni/contenuti, filtri multipli (tipo, data, durata), ricerca nei contenuti Markdown e salvataggio ricerche frequenti in localStorage
 - **2025-11-18**: Implementati template e duplicazione corsi: modello database CourseTemplate, API per salvare/duplicare/importare/esportare template, interfaccia UI con libreria template e pulsanti nelle card corsi
 - **2025-11-19**: Implementata esportazione batch: pulsante "Esporta" nelle card corsi, modale con opzioni (formato PDF/DOCX, includi domande, includi relazione finale, esporta come ZIP), endpoint backend `/api/courses/<id>/export-batch` che supporta esportazione tutte lezioni in un unico documento o ZIP con file separati
-- **2025-11-19**: Implementate Analisi e Suggerimenti AI: pulsante "Analisi AI" nelle card corsi, modale con 4 tipi di analisi (bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti), endpoint backend `/api/courses/<id>/ai-analysis/<type>` che usa ChatGPT per analizzare il corso e fornire raccomandazioni
+- **2025-11-19**: Implementate Analisi e Suggerimenti AI: pulsante "Analisi AI" nelle card corsi, modale con 4 tipi di analisi (bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti), endpoint backend `/api/courses/<id>/ai-analysis/<type>` che usa ChatGPT per analizzare il corso e fornire raccomandazioni, sistema di salvataggio analisi con tab "Analisi Salvate" e download diretto PDF/DOCX
+- **2025-11-19**: Implementata Validazione Contenuti: pulsante "Valida Contenuti" nella gestione lezioni, modale con dashboard statistiche (lezioni totali, complete, incomplete, con errori), controllo completezza (titolo, descrizione, contenuto), verifica presenza obiettivi/materiali/esercizi, validazione formattazione Markdown (titoli, liste, grassetto), alert visivi con badge colorati per ogni lezione
+- **2025-11-19 19:02**: Implementato Backup e Restore: tab "Backup" nelle preferenze con sezioni "Crea Backup", "Ripristina Backup", "Cronologia Backup" e "Impostazioni Backup Automatico". Endpoint backend `/api/backup/create` per creare backup JSON completo, `/api/backup/restore` per ripristinare con opzioni selettive, `/api/backup/list` per cronologia, `/api/backup/download/<filename>` per download. Rotazione automatica backup basata su preferenze. Interfaccia con pulsante "Indietro" per tornare al tab precedente.
 
 ---
 
@@ -326,5 +330,5 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 
 ---
 
-*Ultimo aggiornamento: 2025-11-19*
+*Ultimo aggiornamento: 2025-11-19 19:02 (Backup e Restore)*
 

@@ -920,180 +920,429 @@
             </div>
         </div>
 
+        <!-- Modal Validazione Contenuti -->
+        <div class="modal fade" id="validationModal" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-check-circle"></i> Validazione Contenuti</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" style="max-height: calc(70vh - 120px); overflow-y: auto; padding-bottom: 0;">
+                        <div class="mb-3">
+                            <h6>Corso: <span id="validationCourseName"></span></h6>
+                        </div>
+                        
+                        <!-- Tab Navigation -->
+                        <ul class="nav nav-tabs mb-3" id="validationTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="new-validation-tab" data-bs-toggle="tab" data-bs-target="#new-validation-pane" type="button" role="tab">
+                                    <i class="bi bi-plus-circle"></i> Nuova Validazione
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="saved-validations-tab" data-bs-toggle="tab" data-bs-target="#saved-validations-pane" type="button" role="tab" onclick="loadSavedValidations()">
+                                    <i class="bi bi-folder"></i> Validazioni Salvate
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="validationTabContent">
+                            <!-- Tab Nuova Validazione -->
+                            <div class="tab-pane fade show active" id="new-validation-pane" role="tabpanel">
+                                <div id="validationProgress" style="display: none;">
+                                    <div class="progress mb-3">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="validationProgressBar"></div>
+                                    </div>
+                                    <p class="text-center text-muted" id="validationStatus">Validazione in corso...</p>
+                                </div>
+                                
+                                <div id="validationResults" style="display: none;">
+                                    <div class="row mb-3">
+                                        <div class="col-md-3">
+                                            <div class="card text-center">
+                                                <div class="card-body">
+                                                    <h3 id="validationTotalLessons" class="mb-0">0</h3>
+                                                    <small class="text-muted">Lezioni Totali</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card text-center border-success">
+                                                <div class="card-body">
+                                                    <h3 id="validationCompleteLessons" class="mb-0 text-success">0</h3>
+                                                    <small class="text-muted">Complete</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card text-center border-warning">
+                                                <div class="card-body">
+                                                    <h3 id="validationIncompleteLessons" class="mb-0 text-warning">0</h3>
+                                                    <small class="text-muted">Incomplete</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="card text-center border-danger">
+                                                <div class="card-body">
+                                                    <h3 id="validationErrorsLessons" class="mb-0 text-danger">0</h3>
+                                                    <small class="text-muted">Con Errori</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="validationDetails">
+                                        <!-- Dettagli validazione verranno inseriti qui -->
+                                    </div>
+                                </div>
+                                
+                                <div id="validationStart" style="display: block;">
+                                    <div class="text-center py-4">
+                                        <p class="text-muted mb-3">Clicca sul pulsante per avviare la validazione dei contenuti del corso</p>
+                                        <button type="button" class="btn btn-primary btn-lg" onclick="runValidation()" id="runValidationBtn">
+                                            <i class="bi bi-play-circle"></i> Avvia Validazione
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Validazioni Salvate -->
+                            <div class="tab-pane fade" id="saved-validations-pane" role="tabpanel">
+                                <div id="savedValidationsList">
+                                    <div class="text-center text-muted py-3">
+                                        <i class="bi bi-hourglass-split"></i> Caricamento validazioni salvate...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="position: sticky; bottom: 0; background-color: white; border-top: 1px solid #dee2e6; z-index: 10;">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal Preferenze -->
         <div class="modal fade" id="preferencesModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content" style="display: flex; flex-direction: column; max-height: 90vh;">
+                <div class="modal-header" style="flex-shrink: 0;">
                     <h5 class="modal-title">
                         <i class="bi bi-gear"></i> Preferenze
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <form id="preferencesForm">
-                        <!-- Sezione Generale -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-sliders"></i> Impostazioni Generali
-                            </h6>
-                            
-                            <div class="mb-3">
-                                <label for="defaultLessonDuration" class="form-label">Durata Predefinita Lezione (ore)</label>
-                                <input type="number" class="form-control" id="defaultLessonDuration" min="0.5" max="8" step="0.5" value="2">
-                                <small class="form-text text-muted">Durata predefinita quando si crea una nuova lezione</small>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="defaultLessonType" class="form-label">Tipo Lezione Predefinito</label>
-                                <select class="form-select" id="defaultLessonType">
-                                    <option value="theory">Teorica</option>
-                                    <option value="practice">Pratica</option>
-                                </select>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="defaultLessonTime" class="form-label">Orario Predefinito Lezioni</label>
-                                <input type="time" class="form-control" id="defaultLessonTime" value="09:00">
-                                <small class="form-text text-muted">Orario predefinito per le date delle lezioni (usato per ICS)</small>
-                            </div>
+                <div class="modal-body" style="flex: 1 1 auto; overflow-y: auto; padding-bottom: 0;">
+                    <!-- Tab Navigation -->
+                    <ul class="nav nav-tabs nav-tabs-sm mb-3" id="preferencesTabs" role="tablist" style="font-size: 0.85rem;">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general-pane" type="button" role="tab" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-sliders"></i> <span class="d-none d-sm-inline">Generale</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="export-tab" data-bs-toggle="tab" data-bs-target="#export-pane" type="button" role="tab" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-file-earmark-arrow-down"></i> <span class="d-none d-sm-inline">Esportazione</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="ai-tab" data-bs-toggle="tab" data-bs-target="#ai-pane" type="button" role="tab" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-robot"></i> <span class="d-none d-sm-inline">AI</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="questions-tab" data-bs-toggle="tab" data-bs-target="#questions-pane" type="button" role="tab" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-question-circle"></i> <span class="d-none d-sm-inline">Domande</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="presentations-tab" data-bs-toggle="tab" data-bs-target="#presentations-pane" type="button" role="tab" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-file-slides"></i> <span class="d-none d-sm-inline">Presentazioni</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="advanced-tab" data-bs-toggle="tab" data-bs-target="#advanced-pane" type="button" role="tab" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-code-slash"></i> <span class="d-none d-sm-inline">Avanzate</span>
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-pane" type="button" role="tab" onclick="loadBackupHistory()" style="padding: 0.4rem 0.6rem;">
+                                <i class="bi bi-database"></i> <span class="d-none d-sm-inline">Backup</span>
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="preferencesTabContent">
+                        <!-- Tab Generale -->
+                        <div class="tab-pane fade show active" id="general-pane" role="tabpanel">
+                            <form id="preferencesForm">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">
+                                        <i class="bi bi-sliders"></i> Impostazioni Generali
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label for="defaultLessonDuration" class="form-label">Durata Predefinita Lezione (ore)</label>
+                                        <input type="number" class="form-control" id="defaultLessonDuration" min="0.5" max="8" step="0.5" value="2">
+                                        <small class="form-text text-muted">Durata predefinita quando si crea una nuova lezione</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="defaultLessonType" class="form-label">Tipo Lezione Predefinito</label>
+                                        <select class="form-select" id="defaultLessonType">
+                                            <option value="theory">Teorica</option>
+                                            <option value="practice">Pratica</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="defaultLessonTime" class="form-label">Orario Predefinito Lezioni</label>
+                                        <input type="time" class="form-control" id="defaultLessonTime" value="09:00">
+                                        <small class="form-text text-muted">Orario predefinito per le date delle lezioni (usato per ICS)</small>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                         
-                        <!-- Sezione Esportazione -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-file-earmark-arrow-down"></i> Impostazioni Esportazione
-                            </h6>
-                            
-                            <div class="mb-3">
-                                <label for="exportAuthor" class="form-label">Autore Documenti Esportati</label>
-                                <input type="text" class="form-control" id="exportAuthor" placeholder="Nome Autore">
-                                <small class="form-text text-muted">Nome che apparirà nei metadati dei documenti esportati</small>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="exportCompany" class="form-label">Organizzazione</label>
-                                <input type="text" class="form-control" id="exportCompany" placeholder="Nome Organizzazione">
-                                <small class="form-text text-muted">Organizzazione che apparirà nei metadati dei documenti esportati</small>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="hourlyRate" class="form-label">Costo Orario Docente (€)</label>
-                                <input type="number" class="form-control" id="hourlyRate" min="0" step="0.5" value="25">
-                                <small class="form-text text-muted">Costo orario utilizzato per il calcolo degli importi nei corsi</small>
-                            </div>
-                            
-                            <div class="form-check mb-3 preference-placeholder">
-                                <input class="form-check-input" type="checkbox" id="includeFooter" checked>
-                                <label class="form-check-label" for="includeFooter">
-                                    Includi footer nei documenti esportati
-                                </label>
-                            </div>
+                        <!-- Tab Esportazione -->
+                        <div class="tab-pane fade" id="export-pane" role="tabpanel">
+                            <form id="preferencesForm">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">
+                                        <i class="bi bi-file-earmark-arrow-down"></i> Impostazioni Esportazione
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label for="exportAuthor" class="form-label">Autore Documenti Esportati</label>
+                                        <input type="text" class="form-control" id="exportAuthor" placeholder="Nome Autore">
+                                        <small class="form-text text-muted">Nome che apparirà nei metadati dei documenti esportati</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="exportCompany" class="form-label">Organizzazione</label>
+                                        <input type="text" class="form-control" id="exportCompany" placeholder="Nome Organizzazione">
+                                        <small class="form-text text-muted">Organizzazione che apparirà nei metadati dei documenti esportati</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="hourlyRate" class="form-label">Costo Orario Docente (€)</label>
+                                        <input type="number" class="form-control" id="hourlyRate" min="0" step="0.5" value="25">
+                                        <small class="form-text text-muted">Costo orario utilizzato per il calcolo degli importi nei corsi</small>
+                                    </div>
+                                    
+                                    <div class="form-check mb-3 preference-placeholder">
+                                        <input class="form-check-input" type="checkbox" id="includeFooter" checked>
+                                        <label class="form-check-label" for="includeFooter">
+                                            Includi footer nei documenti esportati
+                                        </label>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                         
-                        <!-- Sezione AI -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-robot"></i> Impostazioni AI
-                            </h6>
-                            
-                            <div class="mb-3">
-                                <label for="aiModel" class="form-label">Modello AI</label>
-                                <select class="form-select" id="aiModel">
-                                    <option value="gpt-4o">GPT-4o (Consigliato)</option>
-                                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                                </select>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="aiTemperature" class="form-label">Temperature AI (0.0 - 1.0)</label>
-                                <input type="number" class="form-control" id="aiTemperature" min="0" max="1" step="0.1" value="0.7">
-                                <small class="form-text text-muted">Valori più bassi = risposte più deterministiche, valori più alti = più creative</small>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="aiMaxTokens" class="form-label">Token Massimi per Risposta</label>
-                                <input type="number" class="form-control" id="aiMaxTokens" min="500" max="8000" step="500" value="2000">
-                            </div>
-                            
-                            <div class="form-check mb-3 preference-placeholder">
-                                <input class="form-check-input" type="checkbox" id="autoExpandLessons" checked>
-                                <label class="form-check-label" for="autoExpandLessons">
-                                    Espandi automaticamente le lezioni dopo la generazione
-                                </label>
-                            </div>
+                        <!-- Tab AI -->
+                        <div class="tab-pane fade" id="ai-pane" role="tabpanel">
+                            <form id="preferencesForm">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">
+                                        <i class="bi bi-robot"></i> Impostazioni AI
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label for="aiModel" class="form-label">Modello AI</label>
+                                        <select class="form-select" id="aiModel">
+                                            <option value="gpt-4o">GPT-4o (Consigliato)</option>
+                                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="aiTemperature" class="form-label">Temperature AI (0.0 - 1.0)</label>
+                                        <input type="number" class="form-control" id="aiTemperature" min="0" max="1" step="0.1" value="0.7">
+                                        <small class="form-text text-muted">Valori più bassi = risposte più deterministiche, valori più alti = più creative</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="aiMaxTokens" class="form-label">Token Massimi per Risposta</label>
+                                        <input type="number" class="form-control" id="aiMaxTokens" min="500" max="8000" step="500" value="2000">
+                                    </div>
+                                    
+                                    <div class="form-check mb-3 preference-placeholder">
+                                        <input class="form-check-input" type="checkbox" id="autoExpandLessons" checked>
+                                        <label class="form-check-label" for="autoExpandLessons">
+                                            Espandi automaticamente le lezioni dopo la generazione
+                                        </label>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                         
-                        <!-- Sezione Domande -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-question-circle"></i> Impostazioni Domande
-                            </h6>
-                            
-                            <div class="mb-3">
-                                <label for="questionsCount" class="form-label">Numero Domande Predefinito</label>
-                                <input type="number" class="form-control" id="questionsCount" min="10" max="100" step="5" value="30">
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="questionsOptions" class="form-label">Numero Opzioni per Domanda</label>
-                                <select class="form-select" id="questionsOptions">
-                                    <option value="4" selected>4 opzioni (A, B, C, D)</option>
-                                    <option value="5">5 opzioni (A, B, C, D, E)</option>
-                                </select>
-                            </div>
+                        <!-- Tab Domande -->
+                        <div class="tab-pane fade" id="questions-pane" role="tabpanel">
+                            <form id="preferencesForm">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">
+                                        <i class="bi bi-question-circle"></i> Impostazioni Domande
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label for="questionsCount" class="form-label">Numero Domande Predefinito</label>
+                                        <input type="number" class="form-control" id="questionsCount" min="10" max="100" step="5" value="30">
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="questionsOptions" class="form-label">Numero Opzioni per Domanda</label>
+                                        <select class="form-select" id="questionsOptions">
+                                            <option value="4" selected>4 opzioni (A, B, C, D)</option>
+                                            <option value="5">5 opzioni (A, B, C, D, E)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                         
-                        <!-- Sezione Presentazioni -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-file-slides"></i> Impostazioni Presentazioni
-                            </h6>
-                            
-                            <div class="mb-3 preference-placeholder">
-                                <label for="slidesPerLesson" class="form-label">Slide per Lezione</label>
-                                <input type="number" class="form-control" id="slidesPerLesson" min="5" max="50" step="5" value="10">
-                            </div>
-                            
-                            <div class="form-check mb-3 preference-placeholder">
-                                <input class="form-check-input" type="checkbox" id="includeImages" checked>
-                                <label class="form-check-label" for="includeImages">
-                                    Includi suggerimenti per immagini nelle slide
-                                </label>
-                            </div>
+                        <!-- Tab Presentazioni -->
+                        <div class="tab-pane fade" id="presentations-pane" role="tabpanel">
+                            <form id="preferencesForm">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">
+                                        <i class="bi bi-file-slides"></i> Impostazioni Presentazioni
+                                    </h6>
+                                    
+                                    <div class="mb-3 preference-placeholder">
+                                        <label for="slidesPerLesson" class="form-label">Slide per Lezione</label>
+                                        <input type="number" class="form-control" id="slidesPerLesson" min="5" max="50" step="5" value="10">
+                                    </div>
+                                    
+                                    <div class="form-check mb-3 preference-placeholder">
+                                        <input class="form-check-input" type="checkbox" id="includeImages" checked>
+                                        <label class="form-check-label" for="includeImages">
+                                            Includi suggerimenti per immagini nelle slide
+                                        </label>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                         
-                        <!-- Sezione Avanzate -->
-                        <div class="mb-4">
-                            <h6 class="border-bottom pb-2 mb-3">
-                                <i class="bi bi-code-slash"></i> Impostazioni Avanzate
-                            </h6>
-                            
+                        <!-- Tab Avanzate -->
+                        <div class="tab-pane fade" id="advanced-pane" role="tabpanel">
+                            <form id="preferencesForm">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">
+                                        <i class="bi bi-code-slash"></i> Impostazioni Avanzate
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        <label for="coursesDir" class="form-label">Directory Corsi</label>
+                                        <input type="text" class="form-control" id="coursesDir" placeholder="courses" readonly>
+                                        <small class="form-text text-muted">Directory dove vengono salvati i file dei corsi</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="mdSourceDir" class="form-label">Directory File Markdown</label>
+                                        <input type="text" class="form-control" id="mdSourceDir" placeholder="MD" readonly>
+                                        <small class="form-text text-muted">Directory da cui vengono caricati i file .md</small>
+                                    </div>
+                                    
+                                    <div class="form-check mb-3 preference-placeholder">
+                                        <input class="form-check-input" type="checkbox" id="enableDebugLogs">
+                                        <label class="form-check-label" for="enableDebugLogs">
+                                            Abilita log di debug nella console
+                                        </label>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        <!-- Tab Backup -->
+                        <div class="tab-pane fade" id="backup-pane" role="tabpanel">
                             <div class="mb-3">
-                                <label for="coursesDir" class="form-label">Directory Corsi</label>
-                                <input type="text" class="form-control" id="coursesDir" placeholder="courses" readonly>
-                                <small class="form-text text-muted">Directory dove vengono salvati i file dei corsi</small>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goBackToPreviousTab()">
+                                    <i class="bi bi-arrow-left"></i> Indietro
+                                </button>
                             </div>
-                            
-                            <div class="mb-3">
-                                <label for="mdSourceDir" class="form-label">Directory File Markdown</label>
-                                <input type="text" class="form-control" id="mdSourceDir" placeholder="MD" readonly>
-                                <small class="form-text text-muted">Directory da cui vengono caricati i file .md</small>
-                            </div>
-                            
-                            <div class="form-check mb-3 preference-placeholder">
-                                <input class="form-check-input" type="checkbox" id="enableDebugLogs">
-                                <label class="form-check-label" for="enableDebugLogs">
-                                    Abilita log di debug nella console
-                                </label>
+                            <div class="mb-4">
+                                <h6 class="border-bottom pb-2 mb-3">
+                                    <i class="bi bi-database"></i> Backup e Restore
+                                </h6>
+                                    
+                                    <div class="row mb-4">
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <h6 class="card-title"><i class="bi bi-download"></i> Crea Backup</h6>
+                                                    <p class="card-text small text-muted">Esporta tutti i dati (corsi, lezioni, preferenze) in un file JSON</p>
+                                                    <button type="button" class="btn btn-primary w-100" onclick="createBackup()">
+                                                        <i class="bi bi-download"></i> Crea Backup Completo
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <h6 class="card-title"><i class="bi bi-upload"></i> Ripristina Backup</h6>
+                                                    <p class="card-text small text-muted">Importa dati da un file JSON di backup</p>
+                                                    <input type="file" id="backupFileInput" accept=".json" style="display: none;" onchange="restoreBackup(this.files[0])">
+                                                    <button type="button" class="btn btn-success w-100" onclick="document.getElementById('backupFileInput').click()">
+                                                        <i class="bi bi-upload"></i> Carica e Ripristina
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h6 class="border-bottom pb-2 mb-3">
+                                            <i class="bi bi-clock-history"></i> Cronologia Backup
+                                        </h6>
+                                        <div id="backupHistoryList">
+                                            <div class="text-center text-muted py-3">
+                                                <i class="bi bi-hourglass-split"></i> Caricamento cronologia backup...
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <h6 class="border-bottom pb-2 mb-3">
+                                            <i class="bi bi-gear"></i> Impostazioni Backup Automatico
+                                        </h6>
+                                        <div class="mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="autoBackupEnabled">
+                                                <label class="form-check-label" for="autoBackupEnabled">
+                                                    Abilita backup automatico
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="backupFrequency" class="form-label">Frequenza Backup</label>
+                                            <select class="form-select" id="backupFrequency">
+                                                <option value="daily">Giornaliero</option>
+                                                <option value="weekly">Settimanale</option>
+                                                <option value="monthly">Mensile</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="backupRetention" class="form-label">Numero Backup da Mantenere</label>
+                                            <input type="number" class="form-control" id="backupRetention" min="1" max="50" value="10">
+                                            <small class="form-text text-muted">I backup più vecchi verranno eliminati automaticamente</small>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </form>
+                    </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer" style="flex-shrink: 0; background-color: white; border-top: 1px solid #dee2e6; position: relative; z-index: 1050;">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-                    <button type="button" class="btn btn-primary" onclick="savePreferences()">
+                    <button type="button" class="btn btn-primary" onclick="savePreferences()" style="pointer-events: auto;">
                         <i class="bi bi-save"></i> Salva Preferenze
                     </button>
                 </div>

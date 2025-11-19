@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupHoursRecalculation();
     
     // Rimuovi backdrop se rimane dopo la chiusura delle modali
-    const modals = ['courseModal', 'lessonsModal', 'lessonPreviewModal', 'questionsModal', 'finalReportModal', 'trainAIModal', 'preferencesModal', 'notificationsModal', 'collaborationModal', 'versionHistoryModal', 'versionCompareModal', 'aiAnalysisModal', 'exportModal'];
+    const modals = ['courseModal', 'lessonsModal', 'lessonPreviewModal', 'questionsModal', 'finalReportModal', 'trainAIModal', 'preferencesModal', 'notificationsModal', 'collaborationModal', 'versionHistoryModal', 'versionCompareModal', 'aiAnalysisModal', 'exportModal', 'validationModal'];
     modals.forEach(modalId => {
         const modalElement = document.getElementById(modalId);
         if (modalElement) {
@@ -612,6 +612,9 @@ function displayCourses(courses, returnHtml = false) {
                         </button>
                         <button class="btn btn-sm btn-info flex-fill" onclick="showAIAnalysisModal(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Analisi e Suggerimenti AI">
                             <i class="bi bi-graph-up-arrow"></i> Analisi AI
+                        </button>
+                        <button class="btn btn-sm btn-warning flex-fill" onclick="showValidationModal(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Valida Contenuti">
+                            <i class="bi bi-check-circle"></i> Valida
                         </button>
                         <!-- Funzione Canva in standby
                         <button class="btn btn-sm btn-primary flex-fill" onclick="createWithCanva(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Crea Presentazione su Canva">
@@ -2242,44 +2245,132 @@ async function saveLesson() {
     }
 }
 
-async function editLesson(lessonId) {
+async function editLesson(lessonId, courseId = null) {
     try {
-        const response = await fetch(`${API_BASE}/courses/${currentCourseId}`);
+        // Determina il courseId da usare
+        let targetCourseId = courseId || currentCourseId || currentValidationCourseId;
+        
+        if (!targetCourseId) {
+            // Se non abbiamo il courseId, proviamo a recuperarlo dalla lezione
+            // Facciamo una chiamata per ottenere tutte le lezioni e trovare quella con l'ID
+            const allCoursesResponse = await fetch(`${API_BASE}/courses`);
+            const allCourses = await allCoursesResponse.json();
+            
+            for (const course of allCourses) {
+                const courseResponse = await fetch(`${API_BASE}/courses/${course.id}`);
+                const courseData = await courseResponse.json();
+                const foundLesson = courseData.lessons?.find(l => l.id === lessonId);
+                if (foundLesson) {
+                    targetCourseId = course.id;
+                    break;
+                }
+            }
+        }
+        
+        if (!targetCourseId) {
+            alert('Impossibile determinare il corso della lezione');
+            return;
+        }
+        
+        const response = await fetch(`${API_BASE}/courses/${targetCourseId}`);
         const course = await response.json();
         const lesson = course.lessons.find(l => l.id === lessonId);
         
-        if (!lesson) return;
-
-        document.getElementById('lessonId').value = lesson.id;
-        document.getElementById('lessonTitle').value = lesson.title;
-        document.getElementById('lessonDescription').value = lesson.description || '';
-        document.getElementById('lessonType').value = lesson.lesson_type;
-        document.getElementById('lessonDuration').value = lesson.duration_hours;
-        document.getElementById('lessonOrder').value = lesson.order;
-        document.getElementById('lessonContent').value = lesson.content || '';
-        document.getElementById('lessonObjectives').value = (lesson.objectives || []).join('\n');
-        document.getElementById('lessonMaterials').value = (lesson.materials || []).join('\n');
-        document.getElementById('lessonExercises').value = (lesson.exercises || []).join('\n');
-        
-        // Inizializza il datepicker e imposta la data se presente
-        initLessonDatePicker();
-        if (lesson.lesson_date) {
-            // Assicurati che la data sia nel formato corretto per Flatpickr
-            let dateToSet = lesson.lesson_date;
-            // Se è una stringa ISO con time, prendi solo la parte data
-            if (typeof dateToSet === 'string' && dateToSet.includes('T')) {
-                dateToSet = dateToSet.split('T')[0];
-            }
-            lessonDatePicker.setDate(dateToSet, false); // false = non triggerare eventi
-        } else {
-            lessonDatePicker.clear();
+        if (!lesson) {
+            alert('Lezione non trovata');
+            return;
         }
         
-        document.querySelector('#lessonFormContainer h6').textContent = 'Modifica Lezione';
-        document.getElementById('lessonFormContainer').style.display = 'block';
+        // Imposta currentCourseId per le operazioni successive
+        currentCourseId = targetCourseId;
+
+        // Chiudi la modale di validazione se aperta
+        const validationModalEl = document.getElementById('validationModal');
+        const validationModal = bootstrap.Modal.getInstance(validationModalEl);
+        if (validationModal) {
+            validationModal.hide();
+        }
+
+        // Apri la modale "Gestisci Lezioni" e poi mostra il form
+        await openLessonsModal(targetCourseId);
+        
+        // Attendi che la modale sia completamente aperta e che le lezioni siano caricate
         setTimeout(() => {
-            document.getElementById('lessonFormContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 100);
+            // Popola il form con i dati della lezione
+            document.getElementById('lessonId').value = lesson.id;
+            document.getElementById('lessonTitle').value = lesson.title || '';
+            document.getElementById('lessonDescription').value = lesson.description || '';
+            document.getElementById('lessonType').value = lesson.lesson_type || 'theory';
+            document.getElementById('lessonDuration').value = lesson.duration_hours || 0;
+            document.getElementById('lessonOrder').value = lesson.order || 1;
+            document.getElementById('lessonContent').value = lesson.content || '';
+            
+            // Gestisci obiettivi, materiali ed esercizi (possono essere array o JSON string)
+            let objectives = [];
+            let materials = [];
+            let exercises = [];
+            
+            try {
+                if (lesson.objectives) {
+                    objectives = Array.isArray(lesson.objectives) ? lesson.objectives : JSON.parse(lesson.objectives || '[]');
+                }
+            } catch (e) {
+                console.warn('Errore parsing objectives:', e);
+            }
+            
+            try {
+                if (lesson.materials) {
+                    materials = Array.isArray(lesson.materials) ? lesson.materials : JSON.parse(lesson.materials || '[]');
+                }
+            } catch (e) {
+                console.warn('Errore parsing materials:', e);
+            }
+            
+            try {
+                if (lesson.exercises) {
+                    exercises = Array.isArray(lesson.exercises) ? lesson.exercises : JSON.parse(lesson.exercises || '[]');
+                }
+            } catch (e) {
+                console.warn('Errore parsing exercises:', e);
+            }
+            
+            document.getElementById('lessonObjectives').value = objectives.join('\n');
+            document.getElementById('lessonMaterials').value = materials.join('\n');
+            document.getElementById('lessonExercises').value = exercises.join('\n');
+            
+            // Inizializza il datepicker e imposta la data se presente
+            initLessonDatePicker();
+            if (lesson.lesson_date) {
+                // Assicurati che la data sia nel formato corretto per Flatpickr
+                let dateToSet = lesson.lesson_date;
+                // Se è una stringa ISO con time, prendi solo la parte data
+                if (typeof dateToSet === 'string' && dateToSet.includes('T')) {
+                    dateToSet = dateToSet.split('T')[0];
+                }
+                if (lessonDatePicker) {
+                    lessonDatePicker.setDate(dateToSet, false); // false = non triggerare eventi
+                }
+            } else {
+                if (lessonDatePicker) {
+                    lessonDatePicker.clear();
+                }
+            }
+            
+            // Mostra il form di modifica
+            const formContainer = document.getElementById('lessonFormContainer');
+            if (formContainer) {
+                const formTitle = formContainer.querySelector('h6');
+                if (formTitle) {
+                    formTitle.textContent = 'Modifica Lezione';
+                }
+                formContainer.style.display = 'block';
+                
+                // Scrolla verso il form
+                setTimeout(() => {
+                    formContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+        }, 500);
     } catch (error) {
         console.error('Errore:', error);
         alert('Errore nel caricamento della lezione');
@@ -4422,6 +4513,615 @@ async function exportAIAnalysis(format) {
     } catch (error) {
         console.error('Errore:', error);
         showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+let currentValidationCourseId = null;
+let currentValidationCourseName = null;
+let currentValidationResults = null;
+
+function showValidationModal(courseId, courseName) {
+    currentValidationCourseId = courseId;
+    currentValidationCourseName = courseName;
+    
+    document.getElementById('validationCourseName').textContent = courseName;
+    document.getElementById('validationProgress').style.display = 'none';
+    document.getElementById('validationResults').style.display = 'none';
+    document.getElementById('validationStart').style.display = 'block';
+    document.getElementById('validationDetails').innerHTML = '';
+    currentValidationResults = null;
+    
+    // Reset tab alla prima tab
+    const firstTab = document.getElementById('new-validation-tab');
+    const firstPane = document.getElementById('new-validation-pane');
+    const savedTab = document.getElementById('saved-validations-tab');
+    const savedPane = document.getElementById('saved-validations-pane');
+    
+    firstTab.classList.add('active');
+    firstPane.classList.add('active', 'show');
+    savedTab.classList.remove('active');
+    savedPane.classList.remove('active', 'show');
+    
+    const modal = new bootstrap.Modal(document.getElementById('validationModal'));
+    modal.show();
+}
+
+async function runValidation() {
+    if (!currentValidationCourseId) {
+        showToast('Nessun corso selezionato', 'error');
+        return;
+    }
+    
+    // Mostra progress bar
+    document.getElementById('validationProgress').style.display = 'block';
+    document.getElementById('validationResults').style.display = 'none';
+    document.getElementById('validationProgressBar').style.width = '0%';
+    document.getElementById('validationStatus').textContent = 'Validazione in corso...';
+    document.getElementById('runValidationBtn').disabled = true;
+    
+    try {
+        // Nascondi start, mostra progress
+        document.getElementById('validationStart').style.display = 'none';
+        document.getElementById('validationProgress').style.display = 'block';
+        document.getElementById('validationResults').style.display = 'none';
+        
+        // Aggiorna progress
+        document.getElementById('validationProgressBar').style.width = '30%';
+        document.getElementById('validationStatus').textContent = 'Caricamento lezioni...';
+        
+        // Carica le lezioni del corso
+        const response = await fetch(`${API_BASE}/courses/${currentValidationCourseId}`);
+        const course = await response.json();
+        const lessons = course.lessons || [];
+        
+        // Aggiorna progress
+        document.getElementById('validationProgressBar').style.width = '60%';
+        document.getElementById('validationStatus').textContent = 'Analisi contenuti...';
+        
+        // Valida ogni lezione
+        const validationResults = [];
+        let completeCount = 0;
+        let incompleteCount = 0;
+        let errorsCount = 0;
+        
+        lessons.forEach((lesson, index) => {
+            const issues = [];
+            const warnings = [];
+            
+            // Controllo completezza base
+            if (!lesson.title || lesson.title.trim() === '') {
+                issues.push('Titolo mancante');
+            }
+            
+            if (!lesson.description || lesson.description.trim() === '') {
+                warnings.push('Descrizione mancante');
+            }
+            
+            if (!lesson.content || lesson.content.trim() === '') {
+                issues.push('Contenuto mancante');
+            }
+            
+            // Verifica obiettivi
+            const objectives = lesson.objectives ? (Array.isArray(lesson.objectives) ? lesson.objectives : JSON.parse(lesson.objectives)) : [];
+            if (!objectives || objectives.length === 0) {
+                warnings.push('Obiettivi formativi mancanti');
+            }
+            
+            // Verifica materiali
+            const materials = lesson.materials ? (Array.isArray(lesson.materials) ? lesson.materials : JSON.parse(lesson.materials)) : [];
+            if (!materials || materials.length === 0) {
+                warnings.push('Materiali didattici mancanti');
+            }
+            
+            // Verifica esercizi
+            const exercises = lesson.exercises ? (Array.isArray(lesson.exercises) ? lesson.exercises : JSON.parse(lesson.exercises)) : [];
+            if (!exercises || exercises.length === 0) {
+                warnings.push('Esercizi mancanti');
+            }
+            
+            // Validazione formattazione Markdown
+            const markdownIssues = validateMarkdownFormatting(lesson.content || '');
+            if (markdownIssues.length > 0) {
+                issues.push(...markdownIssues);
+            }
+            
+            // Determina stato
+            let status = 'complete';
+            if (issues.length > 0) {
+                status = 'error';
+                errorsCount++;
+            } else if (warnings.length > 0) {
+                status = 'incomplete';
+                incompleteCount++;
+            } else {
+                completeCount++;
+            }
+            
+            validationResults.push({
+                lesson: lesson,
+                status: status,
+                issues: issues,
+                warnings: warnings
+            });
+        });
+        
+        // Aggiorna progress
+        document.getElementById('validationProgressBar').style.width = '100%';
+        document.getElementById('validationStatus').textContent = 'Validazione completata!';
+        
+        // Salva i risultati per il salvataggio
+        currentValidationResults = {
+            results: validationResults,
+            statistics: {
+                total: validationResults.length,
+                complete: completeCount,
+                incomplete: incompleteCount,
+                errors: errorsCount
+            }
+        };
+        
+        // Mostra risultati
+        displayValidationResults(validationResults, completeCount, incompleteCount, errorsCount);
+        
+        // Salva automaticamente la validazione
+        await saveValidation(currentValidationResults);
+        
+        showToast('Validazione completata e salvata', 'success');
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+        document.getElementById('validationProgress').style.display = 'none';
+        document.getElementById('validationStart').style.display = 'block';
+    }
+}
+
+function validateMarkdownFormatting(content) {
+    const issues = [];
+    
+    if (!content || content.trim() === '') {
+        return issues;
+    }
+    
+    const lines = content.split('\n');
+    
+    // Controlla titoli non formattati correttamente
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Controlla se ci sono # senza spazio dopo
+        if (line.match(/^#{1,6}[^#\s]/)) {
+            issues.push(`Titolo mal formattato alla riga ${i + 1}: manca spazio dopo #`);
+        }
+        
+        // Controlla liste non formattate correttamente
+        if (line.match(/^[\-\*]\S/)) {
+            issues.push(`Lista mal formattata alla riga ${i + 1}: manca spazio dopo - o *`);
+        }
+        
+        // Controlla grassetto/corsivo non chiusi
+        const boldCount = (line.match(/\*\*/g) || []).length;
+        if (boldCount % 2 !== 0) {
+            issues.push(`Grassetto non chiuso alla riga ${i + 1}`);
+        }
+        
+        const italicCount = (line.match(/(?<!\*)\*([^*]+?)\*(?!\*)/g) || []).length;
+        // Questo è più complesso, saltiamo per ora
+    }
+    
+    return issues;
+}
+
+function displayValidationResults(results, completeCount, incompleteCount, errorsCount) {
+    const resultsDiv = document.getElementById('validationResults');
+    const detailsDiv = document.getElementById('validationDetails');
+    
+    // Aggiorna statistiche
+    document.getElementById('validationTotalLessons').textContent = results.length;
+    document.getElementById('validationCompleteLessons').textContent = completeCount;
+    document.getElementById('validationIncompleteLessons').textContent = incompleteCount;
+    document.getElementById('validationErrorsLessons').textContent = errorsCount;
+    
+    // Mostra dettagli
+    let html = '<h6 class="mb-3">Dettagli Validazione</h6>';
+    
+    if (results.length === 0) {
+        html += '<div class="alert alert-info">Nessuna lezione trovata per questo corso.</div>';
+    } else {
+        results.forEach((result, index) => {
+            const lesson = result.lesson;
+            const statusClass = result.status === 'complete' ? 'success' : (result.status === 'error' ? 'danger' : 'warning');
+            const statusIcon = result.status === 'complete' ? 'check-circle' : (result.status === 'error' ? 'x-circle' : 'exclamation-triangle');
+            const statusText = result.status === 'complete' ? 'Completa' : (result.status === 'error' ? 'Con Errori' : 'Incompleta');
+            
+            html += `
+                <div class="card mb-3 border-${statusClass}">
+                    <div class="card-header bg-${statusClass} bg-opacity-10">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-${statusIcon} text-${statusClass}"></i>
+                                <strong>Lezione ${lesson.order}: ${lesson.title}</strong>
+                                <span class="badge bg-${statusClass} ms-2">${statusText}</span>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editLesson(${lesson.id}, ${currentValidationCourseId || 'null'})" title="Modifica Lezione">
+                                <i class="bi bi-pencil"></i> Modifica
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+            `;
+            
+            if (result.issues.length > 0) {
+                html += `
+                    <div class="alert alert-danger mb-2">
+                        <strong><i class="bi bi-x-circle"></i> Errori Critici:</strong>
+                        <ul class="mb-0 mt-2">
+                            ${result.issues.map(issue => `<li>${issue}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            if (result.warnings.length > 0) {
+                html += `
+                    <div class="alert alert-warning mb-0">
+                        <strong><i class="bi bi-exclamation-triangle"></i> Avvisi:</strong>
+                        <ul class="mb-0 mt-2">
+                            ${result.warnings.map(warning => `<li>${warning}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            if (result.issues.length === 0 && result.warnings.length === 0) {
+                html += `
+                    <div class="alert alert-success mb-0">
+                        <i class="bi bi-check-circle"></i> Lezione completa e valida.
+                    </div>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    detailsDiv.innerHTML = html;
+    resultsDiv.style.display = 'block';
+    
+    // Scroll ai risultati
+    resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function saveValidation(validationData) {
+    if (!currentValidationCourseId || !validationData) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentValidationCourseId}/content-validations`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                results: validationData.results,
+                statistics: validationData.statistics
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Errore nel salvataggio della validazione');
+        }
+        
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('Errore nel salvataggio:', error);
+        // Non mostriamo errore all'utente, la validazione è comunque visibile
+    }
+}
+
+async function loadSavedValidations() {
+    if (!currentValidationCourseId) {
+        return;
+    }
+    
+    const container = document.getElementById('savedValidationsList');
+    container.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Caricamento validazioni salvate...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentValidationCourseId}/content-validations`);
+        
+        if (!response.ok) {
+            throw new Error('Errore nel caricamento delle validazioni');
+        }
+        
+        const validations = await response.json();
+        
+        if (validations.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessuna validazione salvata per questo corso.</div>';
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        validations.forEach(validation => {
+            const stats = validation.statistics || {};
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">
+                                <i class="bi bi-check-circle"></i> Validazione del ${validation.created_at_formatted}
+                            </h6>
+                            <p class="mb-1 text-muted small">
+                                <span class="badge bg-success">${stats.complete || 0} Complete</span>
+                                <span class="badge bg-warning">${stats.incomplete || 0} Incomplete</span>
+                                <span class="badge bg-danger">${stats.errors || 0} Con Errori</span>
+                                <span class="badge bg-secondary">${stats.total || 0} Totali</span>
+                            </p>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewSavedValidation(${validation.id})" title="Visualizza">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore nel caricamento: ${error.message}</div>`;
+    }
+}
+
+async function viewSavedValidation(validationId) {
+    if (!currentValidationCourseId) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentValidationCourseId}/content-validations/${validationId}`);
+        
+        if (!response.ok) {
+            throw new Error('Errore nel caricamento della validazione');
+        }
+        
+        const validation = await response.json();
+        
+        // Mostra i risultati nella tab "Nuova Validazione"
+        const firstTab = document.getElementById('new-validation-tab');
+        const firstPane = document.getElementById('new-validation-pane');
+        firstTab.click();
+        
+        // Attendi che il tab sia attivo
+        setTimeout(() => {
+            displayValidationResults(
+                validation.results,
+                validation.statistics.complete || 0,
+                validation.statistics.incomplete || 0,
+                validation.statistics.errors || 0
+            );
+            
+            document.getElementById('validationProgress').style.display = 'none';
+            document.getElementById('validationResults').style.display = 'block';
+            document.getElementById('validationStart').style.display = 'none';
+        }, 100);
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function createBackup() {
+    try {
+        showToast('Creazione backup in corso...', 'info');
+        
+        const response = await fetch(`${API_BASE}/backup/create`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore durante la creazione del backup');
+        }
+        
+        const result = await response.json();
+        
+        // Scarica il file di backup
+        const downloadUrl = `${API_BASE}/backup/download/${result.filename}`;
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = result.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        showToast(`Backup creato con successo! ${result.courses_count} corsi, ${result.preferences_count} preferenze`, 'success');
+        
+        // Ricarica la cronologia backup
+        loadBackupHistory();
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function restoreBackup(file) {
+    if (!file) {
+        return;
+    }
+    
+    if (!confirm('ATTENZIONE: Il ripristino sovrascriverà i dati esistenti. Vuoi continuare?')) {
+        return;
+    }
+    
+    try {
+        showToast('Ripristino backup in corso...', 'info');
+        
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('options', JSON.stringify({
+            restore_courses: true,
+            restore_preferences: true,
+            selected_course_ids: []  // Ripristina tutti i corsi
+        }));
+        
+        const response = await fetch(`${API_BASE}/backup/restore`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore durante il ripristino del backup');
+        }
+        
+        const result = await response.json();
+        
+        showToast(result.message || 'Backup ripristinato con successo!', 'success');
+        
+        // Ricarica i corsi
+        setTimeout(() => {
+            loadCourses();
+            loadBackupHistory();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+async function loadBackupHistory() {
+    const container = document.getElementById('backupHistoryList');
+    if (!container) {
+        return;
+    }
+    
+    container.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Caricamento cronologia backup...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/backup/list`);
+        
+        if (!response.ok) {
+            throw new Error('Errore nel caricamento della cronologia');
+        }
+        
+        const backups = await response.json();
+        
+        if (backups.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessun backup disponibile.</div>';
+            return;
+        }
+        
+        let html = '<div class="list-group">';
+        backups.forEach(backup => {
+            const sizeKB = (backup.size / 1024).toFixed(2);
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">
+                                <i class="bi bi-file-earmark-zip"></i> ${backup.filename}
+                            </h6>
+                            <p class="mb-1 text-muted small">
+                                <span class="badge bg-primary">${backup.courses_count} Corsi</span>
+                                <span class="badge bg-secondary">${sizeKB} KB</span>
+                            </p>
+                            <small class="text-muted">${backup.formatted_date}</small>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="downloadBackup('${backup.filename}')" title="Scarica">
+                                <i class="bi bi-download"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="restoreBackupFromHistory('${backup.filename}')" title="Ripristina">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore nel caricamento: ${error.message}</div>`;
+    }
+}
+
+function downloadBackup(filename) {
+    const url = `${API_BASE}/backup/download/${filename}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    showToast('Download avviato', 'success');
+}
+
+async function restoreBackupFromHistory(filename) {
+    if (!confirm('ATTENZIONE: Il ripristino sovrascriverà i dati esistenti. Vuoi continuare?')) {
+        return;
+    }
+    
+    try {
+        showToast('Download e ripristino backup in corso...', 'info');
+        
+        // Prima scarica il file
+        const downloadResponse = await fetch(`${API_BASE}/backup/download/${filename}`);
+        if (!downloadResponse.ok) {
+            throw new Error('Errore nel download del backup');
+        }
+        
+        const blob = await downloadResponse.blob();
+        const file = new File([blob], filename, { type: 'application/json' });
+        
+        // Poi ripristina
+        await restoreBackup(file);
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+let previousPreferencesTab = 'general-tab';
+
+// Salva il tab precedente quando si cambia tab
+document.addEventListener('DOMContentLoaded', function() {
+    const preferenceTabs = document.querySelectorAll('#preferencesTabs button[data-bs-toggle="tab"]');
+    preferenceTabs.forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            // Se non è il tab backup, salva come precedente
+            if (e.target.id !== 'backup-tab') {
+                previousPreferencesTab = e.target.id;
+            }
+        });
+    });
+});
+
+function goBackToPreviousTab() {
+    const previousTab = document.getElementById(previousPreferencesTab);
+    if (previousTab) {
+        previousTab.click();
+    } else {
+        // Default al tab Generale
+        document.getElementById('general-tab').click();
     }
 }
 
