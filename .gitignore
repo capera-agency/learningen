@@ -12,4 +12,5 @@ database/
 .DS_Store
 *.log
 .env
+backups/
 
