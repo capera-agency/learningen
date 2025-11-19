@@ -904,6 +904,9 @@ function displayLessons(lessons) {
                     <button class="btn btn-sm btn-outline-success expand-chatgpt-btn" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Espandi con ChatGPT">
                         <i class="bi bi-magic"></i> ChatGPT
                     </button>
+                    <button class="btn btn-sm btn-outline-secondary version-history-btn" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Cronologia Versioni">
+                        <i class="bi bi-clock-history"></i>
+                    </button>
                     <button class="btn btn-sm btn-outline-danger delete-lesson-btn" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Elimina">
                         <i class="bi bi-trash"></i>
                     </button>
@@ -984,6 +987,15 @@ function displayLessons(lessons) {
             deleteLesson(lessonId, lessonTitle);
         });
     });
+    
+    // Aggiungi event listener per i pulsanti Cronologia Versioni
+    container.querySelectorAll('.version-history-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const lessonId = parseInt(this.getAttribute('data-lesson-id'));
+            const courseId = parseInt(this.getAttribute('data-course-id'));
+            showVersionHistory(courseId, lessonId);
+        });
+    });
 }
 
 async function updateLessonsOrder(courseId, newOrder) {
@@ -1023,6 +1035,231 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.remove();
     }, 3000);
+}
+
+async function showVersionHistory(courseId, lessonId) {
+    const modal = new bootstrap.Modal(document.getElementById('versionHistoryModal'));
+    const content = document.getElementById('versionHistoryContent');
+    
+    content.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Caricamento...</span></div></div>';
+    modal.show();
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/versions`);
+        if (!response.ok) throw new Error('Errore nel caricamento delle versioni');
+        
+        const data = await response.json();
+        
+        let html = `
+            <div class="mb-3">
+                <h6>Versione Corrente</h6>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">${data.current_version.title}</h6>
+                        <small class="text-muted">Ultimo aggiornamento: ${data.current_version.updated_at ? new Date(data.current_version.updated_at).toLocaleString('it-IT') : 'N/A'}</small>
+                    </div>
+                </div>
+            </div>
+            <h6 class="mb-3">Versioni Precedenti</h6>
+        `;
+        
+        if (data.versions.length === 0) {
+            html += '<div class="alert alert-info">Nessuna versione precedente disponibile.</div>';
+        } else {
+            html += '<div class="list-group">';
+            data.versions.forEach(version => {
+                const date = version.created_at ? new Date(version.created_at).toLocaleString('it-IT') : 'N/A';
+                html += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">Versione ${version.version_number}: ${version.title}</h6>
+                                <small class="text-muted">${date}</small>
+                                ${version.comment ? `<p class="mb-1 mt-2"><small><em>${version.comment}</em></small></p>` : ''}
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" onclick="viewVersion(${courseId}, ${lessonId}, ${version.id})" title="Visualizza">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-info" onclick="compareVersions(${courseId}, ${lessonId}, ${version.id}, 'current')" title="Confronta con corrente">
+                                    <i class="bi bi-arrow-left-right"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-success" onclick="restoreVersion(${courseId}, ${lessonId}, ${version.id}, '${version.title.replace(/'/g, "\\'")}')" title="Ripristina">
+                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+        
+        content.innerHTML = html;
+    } catch (error) {
+        console.error('Errore:', error);
+        content.innerHTML = `<div class="alert alert-danger">Errore nel caricamento delle versioni: ${error.message}</div>`;
+    }
+}
+
+async function viewVersion(courseId, lessonId, versionId) {
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/versions/${versionId}`);
+        if (!response.ok) throw new Error('Errore nel caricamento della versione');
+        
+        const version = await response.json();
+        
+        // Usa il modal delle versioni per visualizzare i dettagli
+        const modal = new bootstrap.Modal(document.getElementById('versionHistoryModal'));
+        const content = document.getElementById('versionHistoryContent');
+        
+        if (!content) {
+            throw new Error('Elemento versionHistoryContent non trovato');
+        }
+        
+        let html = `
+            <div class="mb-3">
+                <button class="btn btn-sm btn-outline-secondary mb-3" onclick="showVersionHistory(${courseId}, ${lessonId})">
+                    <i class="bi bi-arrow-left"></i> Torna alla Cronologia
+                </button>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <h5>Versione ${version.version_number}: ${version.title}</h5>
+                    <small class="text-muted">${version.created_at ? new Date(version.created_at).toLocaleString('it-IT') : 'N/A'}</small>
+                </div>
+                <div class="card-body">
+                    ${version.comment ? `<div class="alert alert-info mb-3"><strong>Commento:</strong> ${version.comment}</div>` : ''}
+                    <div class="mb-3">
+                        <strong>Descrizione:</strong>
+                        <p>${version.description || '<em>Nessuna descrizione</em>'}</p>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Contenuti:</strong>
+                        <div class="markdown-preview border p-3 rounded" style="max-height: 400px; overflow-y: auto;">${version.content ? marked.parse(version.content) : '<em>Nessun contenuto</em>'}</div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Obiettivi:</strong>
+                        <ul>${version.objectives.length > 0 ? version.objectives.map(obj => `<li>${obj}</li>`).join('') : '<li><em>Nessun obiettivo</em></li>'}</ul>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Materiali:</strong>
+                        <ul>${version.materials.length > 0 ? version.materials.map(mat => `<li>${mat}</li>`).join('') : '<li><em>Nessun materiale</em></li>'}</ul>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Esercizi:</strong>
+                        <ul>${version.exercises.length > 0 ? version.exercises.map(ex => `<li>${ex}</li>`).join('') : '<li><em>Nessun esercizio</em></li>'}</ul>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        content.innerHTML = html;
+        modal.show();
+    } catch (error) {
+        console.error('Errore:', error);
+        alert('Errore nel caricamento della versione: ' + error.message);
+    }
+}
+
+async function compareVersions(courseId, lessonId, version1Id, version2Id) {
+    try {
+        const url = `${API_BASE}/courses/${courseId}/lessons/${lessonId}/versions/compare?version1=${version1Id}&version2=${version2Id}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Errore nel confronto delle versioni');
+        
+        const data = await response.json();
+        
+        const modal = new bootstrap.Modal(document.getElementById('versionCompareModal'));
+        document.getElementById('compareVersion1Title').textContent = `Versione ${data.version1.version_number}: ${data.version1.title}`;
+        document.getElementById('compareVersion2Title').textContent = `${data.version2.version_number === 'current' ? 'Versione Corrente' : 'Versione ' + data.version2.version_number}: ${data.version2.title}`;
+        
+        const v1Content = document.getElementById('compareVersion1Content');
+        const v2Content = document.getElementById('compareVersion2Content');
+        
+        v1Content.innerHTML = `
+            <div class="mb-3">
+                <strong>Descrizione:</strong>
+                <p>${data.version1.description || '<em>Nessuna descrizione</em>'}</p>
+            </div>
+            <div class="mb-3">
+                <strong>Contenuti:</strong>
+                <div class="markdown-preview">${data.version1.content ? marked.parse(data.version1.content) : '<em>Nessun contenuto</em>'}</div>
+            </div>
+            <div class="mb-3">
+                <strong>Obiettivi:</strong>
+                <ul>${data.version1.objectives.length > 0 ? data.version1.objectives.map(obj => `<li>${obj}</li>`).join('') : '<li><em>Nessun obiettivo</em></li>'}</ul>
+            </div>
+            <div class="mb-3">
+                <strong>Materiali:</strong>
+                <ul>${data.version1.materials.length > 0 ? data.version1.materials.map(mat => `<li>${mat}</li>`).join('') : '<li><em>Nessun materiale</em></li>'}</ul>
+            </div>
+            <div class="mb-3">
+                <strong>Esercizi:</strong>
+                <ul>${data.version1.exercises.length > 0 ? data.version1.exercises.map(ex => `<li>${ex}</li>`).join('') : '<li><em>Nessun esercizio</em></li>'}</ul>
+            </div>
+        `;
+        
+        v2Content.innerHTML = `
+            <div class="mb-3">
+                <strong>Descrizione:</strong>
+                <p>${data.version2.description || '<em>Nessuna descrizione</em>'}</p>
+            </div>
+            <div class="mb-3">
+                <strong>Contenuti:</strong>
+                <div class="markdown-preview">${data.version2.content ? marked.parse(data.version2.content) : '<em>Nessun contenuto</em>'}</div>
+            </div>
+            <div class="mb-3">
+                <strong>Obiettivi:</strong>
+                <ul>${data.version2.objectives.length > 0 ? data.version2.objectives.map(obj => `<li>${obj}</li>`).join('') : '<li><em>Nessun obiettivo</em></li>'}</ul>
+            </div>
+            <div class="mb-3">
+                <strong>Materiali:</strong>
+                <ul>${data.version2.materials.length > 0 ? data.version2.materials.map(mat => `<li>${mat}</li>`).join('') : '<li><em>Nessun materiale</em></li>'}</ul>
+            </div>
+            <div class="mb-3">
+                <strong>Esercizi:</strong>
+                <ul>${data.version2.exercises.length > 0 ? data.version2.exercises.map(ex => `<li>${ex}</li>`).join('') : '<li><em>Nessun esercizio</em></li>'}</ul>
+            </div>
+        `;
+        
+        modal.show();
+    } catch (error) {
+        console.error('Errore:', error);
+        alert('Errore nel confronto delle versioni: ' + error.message);
+    }
+}
+
+async function restoreVersion(courseId, lessonId, versionId, versionTitle) {
+    if (!confirm(`Sei sicuro di voler ripristinare la versione "${versionTitle}"?\n\nLa versione corrente verrà salvata automaticamente come backup.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${courseId}/lessons/${lessonId}/versions/${versionId}/restore`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore nel ripristino');
+        }
+        
+        const result = await response.json();
+        showToast(result.message, 'success');
+        
+        // Chiudi il modal delle versioni
+        const versionModal = bootstrap.Modal.getInstance(document.getElementById('versionHistoryModal'));
+        if (versionModal) versionModal.hide();
+        
+        // Ricarica le lezioni per mostrare la versione ripristinata
+        if (currentCourseId) {
+            await openLessonsModal(currentCourseId);
+        }
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore nel ripristino della versione: ' + error.message, 'error');
+    }
 }
 
 function setupHoursRecalculation() {

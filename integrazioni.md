@@ -60,13 +60,13 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 ## 📝 Versioning e Storia
 
 ### Versioning delle Lezioni
-- [ ] Cronologia modifiche per ogni lezione
-- [ ] Confronto versioni side-by-side
-- [ ] Ripristino versioni precedenti
-- [ ] Commenti per ogni versione
+- [x] Cronologia modifiche per ogni lezione
+- [x] Confronto versioni side-by-side
+- [x] Ripristino versioni precedenti
+- [x] Commenti per ogni versione
 
 **Priorità:** Bassa  
-**Stato:** Proposta
+**Stato:** ✅ Completato (2025-01-XX)
 
 ---
 

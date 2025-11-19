@@ -122,6 +122,27 @@ class CourseTemplate(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class LessonVersion(db.Model):
+    """Versioni storiche delle lezioni per il versioning"""
+    id = db.Column(db.Integer, primary_key=True)
+    lesson_id = db.Column(db.Integer, db.ForeignKey('lesson.id'), nullable=False)
+    version_number = db.Column(db.Integer, nullable=False)  # Numero versione incrementale
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    lesson_type = db.Column(db.String(20), nullable=False)
+    duration_hours = db.Column(db.Float, nullable=False)
+    order = db.Column(db.Integer, nullable=False)
+    content = db.Column(db.Text)
+    objectives = db.Column(db.Text)  # JSON array
+    materials = db.Column(db.Text)  # JSON array
+    exercises = db.Column(db.Text)  # JSON array
+    lesson_date = db.Column(db.Date, nullable=True)
+    comment = db.Column(db.Text)  # Commento opzionale per questa versione
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.String(100))  # Utente che ha creato la versione (opzionale)
+    
+    lesson = db.relationship('Lesson', backref='versions')
+
 # Creare directory per i corsi
 os.makedirs(app.config['COURSES_DIR'], exist_ok=True)
 os.makedirs(app.config['MD_SOURCE_DIR'], exist_ok=True)
@@ -263,6 +284,35 @@ def init_database():
                     logger.info("   ✓ Tabella course_template creata")
                 except Exception as e:
                     logger.info(f"   Info course_template creation: {e}")
+            
+            # Migrazione per lesson_version
+            if 'lesson_version' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS lesson_version (
+                            id INTEGER PRIMARY KEY,
+                            lesson_id INTEGER NOT NULL,
+                            version_number INTEGER NOT NULL,
+                            title VARCHAR(200) NOT NULL,
+                            description TEXT,
+                            lesson_type VARCHAR(20) NOT NULL,
+                            duration_hours REAL NOT NULL,
+                            "order" INTEGER NOT NULL,
+                            content TEXT,
+                            objectives TEXT,
+                            materials TEXT,
+                            exercises TEXT,
+                            lesson_date DATE,
+                            comment TEXT,
+                            created_at DATETIME,
+                            created_by VARCHAR(100),
+                            FOREIGN KEY (lesson_id) REFERENCES lesson(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella lesson_version creata")
+                except Exception as e:
+                    logger.info(f"   Info lesson_version creation: {e}")
             
             # Test query per verificare che funzioni
             try:
@@ -1051,7 +1101,34 @@ def update_lesson(course_id, lesson_id):
     lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
     data = request.json
     
+    # Salva versione corrente prima di aggiornare (versioning)
+    try:
+        # Calcola il prossimo numero di versione
+        max_version = db.session.query(db.func.max(LessonVersion.version_number)).filter_by(lesson_id=lesson_id).scalar() or 0
+        next_version = max_version + 1
+        
+        # Crea una versione della lezione corrente
+        version = LessonVersion(
+            lesson_id=lesson_id,
+            version_number=next_version,
+            title=lesson.title,
+            description=lesson.description,
+            lesson_type=lesson.lesson_type,
+            duration_hours=lesson.duration_hours,
+            order=lesson.order,
+            content=lesson.content,
+            objectives=lesson.objectives,
+            materials=lesson.materials,
+            exercises=lesson.exercises,
+            lesson_date=lesson.lesson_date,
+            comment=data.get('version_comment', '')  # Commento opzionale dalla richiesta
+        )
+        db.session.add(version)
+    except Exception as e:
+        logger.warning(f"Errore nel salvataggio versione: {e}")
+        # Continua anche se il salvataggio della versione fallisce
     
+    # Aggiorna la lezione
     lesson.title = data.get('title', lesson.title)
     lesson.description = data.get('description', lesson.description)
     lesson.lesson_type = data.get('lesson_type', lesson.lesson_type)
@@ -1085,6 +1162,159 @@ def delete_lesson(course_id, lesson_id):
     db.session.delete(lesson)
     db.session.commit()
     return jsonify({'message': 'Lezione eliminata con successo'}), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/versions', methods=['GET'])
+def get_lesson_versions(course_id, lesson_id):
+    """Ottiene la cronologia delle versioni di una lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    
+    versions = LessonVersion.query.filter_by(lesson_id=lesson_id).order_by(LessonVersion.version_number.desc()).all()
+    
+    versions_data = [{
+        'id': v.id,
+        'version_number': v.version_number,
+        'title': v.title,
+        'created_at': v.created_at.isoformat() if v.created_at else None,
+        'comment': v.comment,
+        'created_by': v.created_by
+    } for v in versions]
+    
+    return jsonify({
+        'lesson_id': lesson_id,
+        'current_version': {
+            'title': lesson.title,
+            'updated_at': lesson.updated_at.isoformat() if lesson.updated_at else None
+        },
+        'versions': versions_data
+    }), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/versions/<int:version_id>', methods=['GET'])
+def get_lesson_version(course_id, lesson_id, version_id):
+    """Ottiene i dettagli di una versione specifica"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    version = LessonVersion.query.filter_by(id=version_id, lesson_id=lesson_id).first_or_404()
+    
+    return jsonify({
+        'id': version.id,
+        'version_number': version.version_number,
+        'title': version.title,
+        'description': version.description,
+        'lesson_type': version.lesson_type,
+        'duration_hours': version.duration_hours,
+        'order': version.order,
+        'content': version.content,
+        'objectives': json.loads(version.objectives) if version.objectives else [],
+        'materials': json.loads(version.materials) if version.materials else [],
+        'exercises': json.loads(version.exercises) if version.exercises else [],
+        'lesson_date': version.lesson_date.isoformat() if version.lesson_date else None,
+        'comment': version.comment,
+        'created_at': version.created_at.isoformat() if version.created_at else None,
+        'created_by': version.created_by
+    }), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/versions/compare', methods=['GET'])
+def compare_lesson_versions(course_id, lesson_id):
+    """Confronta due versioni di una lezione side-by-side"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    
+    version1_id = request.args.get('version1')
+    version2_id = request.args.get('version2', 'current')
+    
+    # Versione 1 (sempre una versione storica)
+    if version1_id:
+        v1 = LessonVersion.query.filter_by(id=version1_id, lesson_id=lesson_id).first_or_404()
+        v1_data = {
+            'id': v1.id,
+            'version_number': v1.version_number,
+            'title': v1.title,
+            'description': v1.description,
+            'content': v1.content,
+            'objectives': json.loads(v1.objectives) if v1.objectives else [],
+            'materials': json.loads(v1.materials) if v1.materials else [],
+            'exercises': json.loads(v1.exercises) if v1.exercises else [],
+            'created_at': v1.created_at.isoformat() if v1.created_at else None
+        }
+    else:
+        return jsonify({'error': 'version1 è richiesto'}), 400
+    
+    # Versione 2 (può essere 'current' o un'altra versione)
+    if version2_id == 'current':
+        v2_data = {
+            'id': 'current',
+            'version_number': 'current',
+            'title': lesson.title,
+            'description': lesson.description,
+            'content': lesson.content,
+            'objectives': json.loads(lesson.objectives) if lesson.objectives else [],
+            'materials': json.loads(lesson.materials) if lesson.materials else [],
+            'exercises': json.loads(lesson.exercises) if lesson.exercises else [],
+            'updated_at': lesson.updated_at.isoformat() if lesson.updated_at else None
+        }
+    else:
+        v2 = LessonVersion.query.filter_by(id=version2_id, lesson_id=lesson_id).first_or_404()
+        v2_data = {
+            'id': v2.id,
+            'version_number': v2.version_number,
+            'title': v2.title,
+            'description': v2.description,
+            'content': v2.content,
+            'objectives': json.loads(v2.objectives) if v2.objectives else [],
+            'materials': json.loads(v2.materials) if v2.materials else [],
+            'exercises': json.loads(v2.exercises) if v2.exercises else [],
+            'created_at': v2.created_at.isoformat() if v2.created_at else None
+        }
+    
+    return jsonify({
+        'version1': v1_data,
+        'version2': v2_data
+    }), 200
+
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/versions/<int:version_id>/restore', methods=['POST'])
+def restore_lesson_version(course_id, lesson_id, version_id):
+    """Ripristina una versione precedente della lezione"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    version = LessonVersion.query.filter_by(id=version_id, lesson_id=lesson_id).first_or_404()
+    
+    # Salva la versione corrente prima di ripristinare
+    try:
+        max_version = db.session.query(db.func.max(LessonVersion.version_number)).filter_by(lesson_id=lesson_id).scalar() or 0
+        next_version = max_version + 1
+        
+        current_version = LessonVersion(
+            lesson_id=lesson_id,
+            version_number=next_version,
+            title=lesson.title,
+            description=lesson.description,
+            lesson_type=lesson.lesson_type,
+            duration_hours=lesson.duration_hours,
+            order=lesson.order,
+            content=lesson.content,
+            objectives=lesson.objectives,
+            materials=lesson.materials,
+            exercises=lesson.exercises,
+            lesson_date=lesson.lesson_date,
+            comment='Backup prima del ripristino alla versione ' + str(version.version_number)
+        )
+        db.session.add(current_version)
+    except Exception as e:
+        logger.warning(f"Errore nel salvataggio versione corrente: {e}")
+    
+    # Ripristina i valori dalla versione
+    lesson.title = version.title
+    lesson.description = version.description
+    lesson.lesson_type = version.lesson_type
+    lesson.duration_hours = version.duration_hours
+    lesson.order = version.order
+    lesson.content = version.content
+    lesson.objectives = version.objectives
+    lesson.materials = version.materials
+    lesson.exercises = version.exercises
+    lesson.lesson_date = version.lesson_date
+    lesson.updated_at = datetime.utcnow()
+    lesson.modification_count = (lesson.modification_count or 0) + 1
+    
+    db.session.commit()
+    return jsonify({'message': f'Lezione ripristinata alla versione {version.version_number}'}), 200
 
 @app.route('/api/courses/<int:course_id>/lessons/generate-objectives', methods=['POST'])
 def generate_lesson_objectives(course_id):
