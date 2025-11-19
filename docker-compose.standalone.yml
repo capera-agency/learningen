@@ -1,0 +1,29 @@
+services:
+  learningen:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: learningen-standalone
+    ports:
+      - "5001:5000"
+    environment:
+      # API Keys - valori presi da docker-compose.yml esistente e .env
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your-openai-api-key-here}
+      - CANVA_CLIENT_ID=${CANVA_CLIENT_ID:-AAG4-VNGnQ4}
+      - CANVA_CLIENT_SECRET=${CANVA_CLIENT_SECRET:-1c89c7f4a123219fc0caf23a89ee131d8228e17ba63e45ac3e3f1017bbc08023}
+      - CANVA_REDIRECT_URI=${CANVA_REDIRECT_URI:-http://localhost:5001/api/canva/callback}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - FLASK_ENV=production
+    volumes:
+      # Persistenza database SQLite
+      - ./instance:/app/instance
+      # Persistenza corsi e materiali
+      - ./courses:/app/courses
+      - ./MD:/app/MD
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

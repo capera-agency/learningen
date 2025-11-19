@@ -1,0 +1,50 @@
+services:
+  # Web Service - Applicazione Flask
+  - type: web
+    name: learningen
+    runtime: docker
+    plan: starter  # Puoi cambiare in 'standard' o 'pro' per più risorse
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: null  # Usa il CMD del Dockerfile
+    
+    # Porta (Render assegna automaticamente tramite variabile PORT)
+    # Il Dockerfile deve usare $PORT invece di 5000
+    
+    # Health Check
+    healthCheckPath: /health
+    
+    # Variabili d'ambiente (da configurare nel dashboard Render)
+    # Queste sono solo esempi - configura le reali nel dashboard
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # Le seguenti variabili DEVONO essere configurate nel dashboard Render:
+      # - OPENAI_API_KEY (obbligatorio)
+      # - CANVA_CLIENT_ID (opzionale, se usi Canva)
+      # - CANVA_CLIENT_SECRET (opzionale, se usi Canva)
+      # - CANVA_REDIRECT_URI (opzionale, sarà https://tuo-app.onrender.com/api/canva/callback)
+      # - SECRET_KEY (obbligatorio, genera una chiave forte)
+    
+    # Persistent Disk per dati (database SQLite e file generati)
+    # IMPORTANTE: I persistent disk devono essere creati manualmente nel dashboard Render
+    # dopo il primo deploy. Vedi DEPLOY_RENDER.md per istruzioni dettagliate
+    # 
+    # Path da montare nel container Docker:
+    # - /app/instance -> per il database SQLite
+    # - /app/courses -> per i file Markdown generati
+    # - /app/MD -> per i file MD sorgente
+    
+    # Auto-deploy da Git (opzionale)
+    # Se hai un repository Git, Render può fare auto-deploy
+    # repo: https://github.com/tuo-username/learningen
+    # branch: main
+    
+    # Build Command (non necessario se usi Dockerfile)
+    # buildCommand: null
+    
+    # Start Command (non necessario, usa CMD del Dockerfile)
+    # startCommand: null
+

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Corsi - Learning Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1" style="cursor: pointer;" onclick="showCourses()">
+                <i class="bi bi-book"></i> Gestione Corsi
+            </span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-light" onclick="showDashboard()" title="Dashboard">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </button>
+                <button class="btn btn-outline-light" onclick="showTemplatesModal()" title="Libreria Template">
+                    <i class="bi bi-bookmark-star"></i> Template
+                </button>
+                <button class="btn btn-outline-light" onclick="showPreferencesModal()" title="Preferenze">
+                    <i class="bi bi-gear"></i> Preferenze
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Dashboard Section -->
+        <div id="dashboardSection" style="display: none;">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h2>
+                        <i class="bi bi-speedometer2"></i> Dashboard
+                    </h2>
+                </div>
+            </div>
+            
+            <!-- Statistiche Generali -->
+            <div class="row mb-4">
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-book text-primary"></i> Totale Corsi</h5>
+                            <h3 class="mb-0" id="totalCourses">0</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-clock text-success"></i> Ore Totali</h5>
+                            <h3 class="mb-0" id="totalHours">0</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-list-check text-info"></i> Totale Lezioni</h5>
+                            <h3 class="mb-0" id="totalLessons">0</h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="bi bi-cash-coin text-warning"></i> Importo Totale</h5>
+                            <h3 class="mb-0" id="totalRevenue">€0.00</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Grafici -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Ore per Corso</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="hoursPerCourseChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-pie-chart"></i> Distribuzione Teoria/Pratica</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="theoryPracticeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Corsi Recenti e Prossime Lezioni -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-clock-history"></i> Corsi Più Recenti</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="recentCoursesList"></div>
+                            <div id="recentCoursesPagination" class="mt-3 d-flex justify-content-between align-items-center" style="display: none;">
+                                <button class="btn btn-sm btn-outline-primary" id="recentPrevBtn" onclick="loadRecentCoursesPage(-1)" disabled>
+                                    <i class="bi bi-chevron-left"></i> Precedente
+                                </button>
+                                <span class="text-muted" id="recentPageInfo">Pagina 1 di 1</span>
+                                <button class="btn btn-sm btn-outline-primary" id="recentNextBtn" onclick="loadRecentCoursesPage(1)" disabled>
+                                    Successivo <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-calendar-event"></i> Prossime Lezioni</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="upcomingLessonsList"></div>
+                            <div id="upcomingLessonsPagination" class="mt-3 d-flex justify-content-between align-items-center" style="display: none;">
+                                <button class="btn btn-sm btn-outline-primary" id="upcomingPrevBtn" onclick="loadUpcomingLessonsPage(-1)" disabled>
+                                    <i class="bi bi-chevron-left"></i> Precedente
+                                </button>
+                                <span class="text-muted" id="upcomingPageInfo">Pagina 1 di 1</span>
+                                <button class="btn btn-sm btn-outline-primary" id="upcomingNextBtn" onclick="loadUpcomingLessonsPage(1)" disabled>
+                                    Successivo <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Importi per Periodo -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-graph-up"></i> Importi per Periodo</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="periodSelect" class="form-label">Seleziona Periodo:</label>
+                                <select class="form-select" id="periodSelect" onchange="loadRevenueByPeriod()">
+                                    <option value="month">Ultimo Mese</option>
+                                    <option value="quarter">Ultimo Trimestre</option>
+                                    <option value="year" selected>Ultimo Anno</option>
+                                    <option value="all">Tutti</option>
+                                </select>
+                            </div>
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Statistiche Utilizzo -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Lezioni Più Modificate</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="mostModifiedLessonsList"></div>
+                            <div id="lessonsPagination" class="mt-3 d-flex justify-content-between align-items-center" style="display: none;">
+                                <button class="btn btn-sm btn-outline-primary" id="prevPageBtn" onclick="loadModifiedLessonsPage(-1)" disabled>
+                                    <i class="bi bi-chevron-left"></i> Precedente
+                                </button>
+                                <span class="text-muted" id="pageInfo">Pagina 1 di 1</span>
+                                <button class="btn btn-sm btn-outline-primary" id="nextPageBtn" onclick="loadModifiedLessonsPage(1)" disabled>
+                                    Successivo <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-download"></i> Corsi Più Esportati</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="mostExportedCoursesList"></div>
+                            <div id="exportedCoursesPagination" class="mt-3 d-flex justify-content-between align-items-center" style="display: none;">
+                                <button class="btn btn-sm btn-outline-primary" id="exportedPrevBtn" onclick="loadExportedCoursesPage(-1)" disabled>
+                                    <i class="bi bi-chevron-left"></i> Precedente
+                                </button>
+                                <span class="text-muted" id="exportedPageInfo">Pagina 1 di 1</span>
+                                <button class="btn btn-sm btn-outline-primary" id="exportedNextBtn" onclick="loadExportedCoursesPage(1)" disabled>
+                                    Successivo <i class="bi bi-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Corsi Section (default) -->
+        <div id="coursesSection">
+            <div class="row mb-4">
+                <div class="col-md-8">
+                    <h2>
+                        <i class="bi bi-book-half"></i> Corsi Disponibili
+                    </h2>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-outline-primary me-2" id="toggleSearchBtn" onclick="toggleSearchPanel()" title="Ricerca Avanzata">
+                        <i class="bi bi-search"></i> <span id="searchBtnText">Ricerca</span>
+                    </button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-success" onclick="newCourse()">
+                            <i class="bi bi-plus-circle"></i> Nuovo Corso
+                        </button>
+                        <button class="btn btn-success dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Toggle Dropdown</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="event.preventDefault(); showTemplatesModal();">
+                                <i class="bi bi-bookmark-star"></i> Crea da Template
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pannello Ricerca Avanzata -->
+            <div id="searchPanel" class="card mb-4" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-funnel"></i> Ricerca e Filtri</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Ricerca Full-Text -->
+                        <div class="col-md-6 mb-3">
+                            <label for="searchQuery" class="form-label">Ricerca Testo</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="searchQuery" placeholder="Cerca in corsi, lezioni, contenuti..." onkeypress="if(event.key === 'Enter') performSearch()">
+                                <button class="btn btn-primary" onclick="performSearch()">
+                                    <i class="bi bi-search"></i> Cerca
+                                </button>
+                            </div>
+                            <small class="text-muted">Cerca in nome, codice, descrizione, contenuti delle lezioni</small>
+                        </div>
+                        
+                        <!-- Filtri -->
+                        <div class="col-md-3 mb-3">
+                            <label for="filterLessonType" class="form-label">Tipo Lezione</label>
+                            <select class="form-select" id="filterLessonType">
+                                <option value="">Tutti</option>
+                                <option value="theory">Teoria</option>
+                                <option value="practice">Pratica</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            <label for="filterDuration" class="form-label">Durata Minima (ore)</label>
+                            <input type="number" class="form-control" id="filterDuration" min="0" step="0.5" placeholder="Es: 2">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="filterDateFrom" class="form-label">Data Da</label>
+                            <input type="date" class="form-control" id="filterDateFrom">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="filterDateTo" class="form-label">Data A</label>
+                            <input type="date" class="form-control" id="filterDateTo">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3 d-flex align-items-end">
+                            <div class="w-100 d-flex gap-2">
+                                <button class="btn btn-primary flex-fill" onclick="performSearch()">
+                                    <i class="bi bi-search"></i> Cerca
+                                </button>
+                                <button class="btn btn-secondary flex-fill" onclick="clearFilters()">
+                                    <i class="bi bi-x-circle"></i> Pulisci
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ricerche Frequenti -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <label class="form-label">Ricerche Frequenti</label>
+                            <div id="savedSearches" class="d-flex flex-wrap gap-2">
+                                <!-- Le ricerche salvate verranno caricate qui -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="coursesList" class="row">
+                <!-- Corsi caricati dinamicamente -->
+            </div>
+        </div>
+
+        <!-- Modal Nuovo/Modifica Corso -->
+        <div class="modal fade" id="courseModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Nuovo Corso</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="courseMode" id="modeManual" value="manual" checked>
+                                <label class="btn btn-outline-primary" for="modeManual">Creazione Manuale</label>
+                                
+                                <input type="radio" class="btn-check" name="courseMode" id="modeMD" value="md">
+                                <label class="btn btn-outline-primary" for="modeMD">Da File Markdown</label>
+                            </div>
+                        </div>
+                        
+                        <div id="manualForm">
+                            <form id="courseForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Codice Corso</label>
+                                    <input type="text" class="form-control" id="courseCode" required>
+                                </div>
+                            <div class="mb-3">
+                                <label class="form-label">Nome Corso</label>
+                                <input type="text" class="form-control" id="courseName" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Descrizione</label>
+                                <textarea class="form-control" id="courseDescription" rows="3"></textarea>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label class="form-label">Ore Totali</label>
+                                    <input type="number" class="form-control" id="totalHours" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Ore Teoriche</label>
+                                    <input type="number" class="form-control" id="theoryHours" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Ore Pratiche</label>
+                                    <input type="number" class="form-control" id="practiceHours" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Numero Lezioni</label>
+                                    <input type="number" class="form-control" id="numLessons" min="0" value="0">
+                                </div>
+                            </div>
+                            </form>
+                        </div>
+                        
+                        <div id="mdForm" style="display: none;">
+                            <div class="mb-3">
+                                <label class="form-label">Seleziona File Markdown</label>
+                                <select class="form-select" id="mdFileSelect">
+                                    <option value="">Caricamento file...</option>
+                                </select>
+                                <small class="form-text text-muted">I file vengono caricati dalla cartella MD/</small>
+                            </div>
+                            <div id="mdFileInfo" class="alert alert-info" style="display: none;">
+                                <strong>File selezionato:</strong> <span id="mdFileName"></span><br>
+                                <small>Il corso verrà creato automaticamente con tutte le lezioni dal file.</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="button" class="btn btn-primary" id="saveCourseBtn" onclick="saveCourse()">Salva</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Gestione Lezioni -->
+        <div class="modal fade" id="lessonsModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="lessonsModalTitle">Gestione Lezioni</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3 d-flex gap-2 flex-wrap align-items-center">
+                            <button class="btn btn-success" onclick="showLessonForm()">
+                                <i class="bi bi-plus-circle"></i> Aggiungi Lezione Manualmente
+                            </button>
+                            <button class="btn btn-info" onclick="document.getElementById('mdFileInput').click()">
+                                <i class="bi bi-upload"></i> Importa da Markdown
+                            </button>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-warning" onclick="generateQuestions()" id="generateQuestionsBtn">
+                                    <i class="bi bi-question-circle"></i> Genera Domande
+                                </button>
+                                <button type="button" class="btn btn-warning dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false" id="viewQuestionsBtn">
+                                    <span class="visually-hidden">Toggle Dropdown</span>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="showQuestionsModal(); return false;">
+                                        <i class="bi bi-eye"></i> Visualizza Domande
+                                    </a></li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-primary" onclick="showFinalReportModal()" id="finalReportBtn">
+                                <i class="bi bi-file-text"></i> Relazione Finale
+                            </button>
+                            <input type="file" id="mdFileInput" accept=".md" style="display: none;" onchange="importFromMarkdown(event)">
+                        </div>
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> Trascina le lezioni per riordinarle
+                            </small>
+                        </div>
+                        <div id="lessonsList"></div>
+                        <div id="lessonFormContainer" style="display: none;">
+                            <hr>
+                            <h6>Nuova/Modifica Lezione</h6>
+                            <form id="lessonForm">
+                                <input type="hidden" id="lessonId">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Titolo</label>
+                                        <input type="text" class="form-control" id="lessonTitle" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Durata (h)</label>
+                                        <input type="number" step="0.5" class="form-control" id="lessonDuration" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Ordine</label>
+                                        <input type="number" class="form-control" id="lessonOrder" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Data</label>
+                                        <input type="text" class="form-control" id="lessonDate" placeholder="Seleziona data">
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Tipo</label>
+                                    <select class="form-select" id="lessonType" required>
+                                        <option value="theory">Teorica</option>
+                                        <option value="practice">Pratica</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Descrizione</label>
+                                    <textarea class="form-control" id="lessonDescription" rows="2"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">Contenuti (Markdown)</label>
+                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="optimizeContent()" id="optimizeContentBtn" title="Ottimizza contenuti esistenti con AI">
+                                            <i class="bi bi-stars"></i> Ottimizza con AI
+                                        </button>
+                                    </div>
+                                    <textarea class="form-control" id="lessonContent" rows="10"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">Obiettivi (uno per riga)</label>
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="generateObjectives()" id="generateObjectivesBtn" title="Genera obiettivi con AI">
+                                            <i class="bi bi-magic"></i> Genera con AI
+                                        </button>
+                                    </div>
+                                    <textarea class="form-control" id="lessonObjectives" rows="3"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">Materiali (uno per riga)</label>
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="generateMaterials()" id="generateMaterialsBtn" title="Genera materiali con AI">
+                                            <i class="bi bi-magic"></i> Genera con AI
+                                        </button>
+                                    </div>
+                                    <textarea class="form-control" id="lessonMaterials" rows="3"></textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <label class="form-label mb-0">Esercizi (uno per riga)</label>
+                                        <button type="button" class="btn btn-sm btn-outline-info" onclick="generateExercises()" id="generateExercisesBtn" title="Genera esercizi con AI">
+                                            <i class="bi bi-magic"></i> Genera con AI
+                                        </button>
+                                    </div>
+                                    <textarea class="form-control" id="lessonExercises" rows="3"></textarea>
+                                </div>
+                                <button type="button" class="btn btn-primary" onclick="saveLesson()">Salva Lezione</button>
+                                <button type="button" class="btn btn-secondary" onclick="cancelLessonForm()">Annulla</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-success" onclick="generateCourseFiles()">
+                            <i class="bi bi-file-earmark-text"></i> Genera File Markdown
+                        </button>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Anteprima Lezione -->
+    <div class="modal fade" id="lessonPreviewModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="lessonPreviewTitle">Anteprima Lezione</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="lessonPreviewContent" class="markdown-preview"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Domande -->
+    <div class="modal fade" id="questionsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="questionsModalTitle">Domande del Corso</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 d-flex gap-2">
+                        <button class="btn btn-sm btn-primary" onclick="exportQuestions('pdf')">
+                            <i class="bi bi-file-pdf"></i> Esporta PDF
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="exportQuestions('docx')">
+                            <i class="bi bi-file-word"></i> Esporta DOCX
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="exportAnswerKey()">
+                            <i class="bi bi-key"></i> Esporta Correttore
+                        </button>
+                    </div>
+                    <div id="questionsList"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Relazione Finale -->
+    <div class="modal fade" id="finalReportModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="finalReportModalTitle">Genera Relazione Finale</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-3">Inserisci un prompt descrittivo per personalizzare la relazione finale del corso. La relazione sarà generata basandosi sulle lezioni del corso e sul tuo prompt.</p>
+                    
+                    <div class="mb-3">
+                        <label for="finalReportPrompt" class="form-label">Prompt Descrittivo</label>
+                        <textarea class="form-control" id="finalReportPrompt" rows="6" placeholder="Esempio: Scrivi una relazione finale che riassuma gli obiettivi raggiunti, le competenze acquisite dagli studenti, i punti di forza del corso e le eventuali aree di miglioramento. Includi anche una valutazione complessiva dell'efficacia didattica."></textarea>
+                        <small class="form-text text-muted">Descrivi come vuoi che sia strutturata la relazione finale</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button class="btn btn-primary w-100" onclick="generateFinalReport()" id="generateFinalReportBtn">
+                            <i class="bi bi-magic"></i> Genera Relazione
+                        </button>
+                    </div>
+                    
+                    <div id="finalReportResult" style="display: none;">
+                        <hr>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6>Relazione Generata</h6>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-primary" onclick="exportFinalReport('pdf')">
+                                    <i class="bi bi-file-pdf"></i> Esporta PDF
+                                </button>
+                                <button class="btn btn-sm btn-success" onclick="exportFinalReport('docx')">
+                                    <i class="bi bi-file-word"></i> Esporta DOCX
+                                </button>
+                            </div>
+                        </div>
+                        <div id="finalReportContent" class="border p-3 rounded" style="max-height: 400px; overflow-y: auto; background-color: #f8f9fa;">
+                            <!-- La relazione verrà mostrata qui -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Addestra AI -->
+    <div class="modal fade" id="trainAIModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="trainAIModalTitle">Addestra AI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Carica documenti (PDF, DOCX) o inserisci URL per addestrare l'AI con conoscenza aggiuntiva per questo corso.</p>
+                    
+                    <ul class="nav nav-tabs mb-3" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="file-tab" data-bs-toggle="tab" data-bs-target="#file-pane" type="button" role="tab">
+                                <i class="bi bi-file-earmark"></i> Carica File
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="url-tab" data-bs-toggle="tab" data-bs-target="#url-pane" type="button" role="tab">
+                                <i class="bi bi-link-45deg"></i> Inserisci URL
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="file-pane" role="tabpanel">
+                            <form id="trainAIFileForm">
+                                <div class="mb-3">
+                                    <label for="trainAIFile" class="form-label">Seleziona File (PDF, DOCX, DOC)</label>
+                                    <input type="file" class="form-control" id="trainAIFile" accept=".pdf,.docx,.doc" required>
+                                    <small class="form-text text-muted">Formati supportati: PDF, DOCX, DOC</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-upload"></i> Carica e Processa
+                                </button>
+                            </form>
+                        </div>
+                        
+                        <div class="tab-pane fade" id="url-pane" role="tabpanel">
+                            <form id="trainAIURLForm">
+                                <div class="mb-3">
+                                    <label for="trainAIURL" class="form-label">Inserisci URL</label>
+                                    <input type="url" class="form-control" id="trainAIURL" placeholder="https://example.com/article" required>
+                                    <small class="form-text text-muted">L'AI analizzerà il contenuto della pagina web</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-download"></i> Processa URL
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <h6>Materiali di Addestramento Caricati</h6>
+                    <div id="trainingMaterialsList" class="list-group">
+                        <div class="text-center text-muted py-3">
+                            <i class="bi bi-hourglass-split"></i> Caricamento...
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Modal Template -->
+        <div class="modal fade" id="templatesModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-bookmark-star"></i> Libreria Template</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <button class="btn btn-primary" onclick="showImportTemplateDialog()">
+                                <i class="bi bi-upload"></i> Importa Template
+                            </button>
+                        </div>
+                        <div id="templatesList">
+                            <div class="text-center text-muted">
+                                <i class="bi bi-hourglass-split"></i> Caricamento template...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Preferenze -->
+        <div class="modal fade" id="preferencesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-gear"></i> Preferenze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="preferencesForm">
+                        <!-- Sezione Generale -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="bi bi-sliders"></i> Impostazioni Generali
+                            </h6>
+                            
+                            <div class="mb-3">
+                                <label for="defaultLessonDuration" class="form-label">Durata Predefinita Lezione (ore)</label>
+                                <input type="number" class="form-control" id="defaultLessonDuration" min="0.5" max="8" step="0.5" value="2">
+                                <small class="form-text text-muted">Durata predefinita quando si crea una nuova lezione</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="defaultLessonType" class="form-label">Tipo Lezione Predefinito</label>
+                                <select class="form-select" id="defaultLessonType">
+                                    <option value="theory">Teorica</option>
+                                    <option value="practice">Pratica</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="defaultLessonTime" class="form-label">Orario Predefinito Lezioni</label>
+                                <input type="time" class="form-control" id="defaultLessonTime" value="09:00">
+                                <small class="form-text text-muted">Orario predefinito per le date delle lezioni (usato per ICS)</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Sezione Esportazione -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="bi bi-file-earmark-arrow-down"></i> Impostazioni Esportazione
+                            </h6>
+                            
+                            <div class="mb-3">
+                                <label for="exportAuthor" class="form-label">Autore Documenti Esportati</label>
+                                <input type="text" class="form-control" id="exportAuthor" placeholder="Nome Autore">
+                                <small class="form-text text-muted">Nome che apparirà nei metadati dei documenti esportati</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="exportCompany" class="form-label">Organizzazione</label>
+                                <input type="text" class="form-control" id="exportCompany" placeholder="Nome Organizzazione">
+                                <small class="form-text text-muted">Organizzazione che apparirà nei metadati dei documenti esportati</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="hourlyRate" class="form-label">Costo Orario Docente (€)</label>
+                                <input type="number" class="form-control" id="hourlyRate" min="0" step="0.5" value="25">
+                                <small class="form-text text-muted">Costo orario utilizzato per il calcolo degli importi nei corsi</small>
+                            </div>
+                            
+                            <div class="form-check mb-3 preference-placeholder">
+                                <input class="form-check-input" type="checkbox" id="includeFooter" checked>
+                                <label class="form-check-label" for="includeFooter">
+                                    Includi footer nei documenti esportati
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Sezione AI -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="bi bi-robot"></i> Impostazioni AI
+                            </h6>
+                            
+                            <div class="mb-3">
+                                <label for="aiModel" class="form-label">Modello AI</label>
+                                <select class="form-select" id="aiModel">
+                                    <option value="gpt-4o">GPT-4o (Consigliato)</option>
+                                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="aiTemperature" class="form-label">Temperature AI (0.0 - 1.0)</label>
+                                <input type="number" class="form-control" id="aiTemperature" min="0" max="1" step="0.1" value="0.7">
+                                <small class="form-text text-muted">Valori più bassi = risposte più deterministiche, valori più alti = più creative</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="aiMaxTokens" class="form-label">Token Massimi per Risposta</label>
+                                <input type="number" class="form-control" id="aiMaxTokens" min="500" max="8000" step="500" value="2000">
+                            </div>
+                            
+                            <div class="form-check mb-3 preference-placeholder">
+                                <input class="form-check-input" type="checkbox" id="autoExpandLessons" checked>
+                                <label class="form-check-label" for="autoExpandLessons">
+                                    Espandi automaticamente le lezioni dopo la generazione
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Sezione Domande -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="bi bi-question-circle"></i> Impostazioni Domande
+                            </h6>
+                            
+                            <div class="mb-3">
+                                <label for="questionsCount" class="form-label">Numero Domande Predefinito</label>
+                                <input type="number" class="form-control" id="questionsCount" min="10" max="100" step="5" value="30">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="questionsOptions" class="form-label">Numero Opzioni per Domanda</label>
+                                <select class="form-select" id="questionsOptions">
+                                    <option value="4" selected>4 opzioni (A, B, C, D)</option>
+                                    <option value="5">5 opzioni (A, B, C, D, E)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Sezione Presentazioni -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="bi bi-file-slides"></i> Impostazioni Presentazioni
+                            </h6>
+                            
+                            <div class="mb-3 preference-placeholder">
+                                <label for="slidesPerLesson" class="form-label">Slide per Lezione</label>
+                                <input type="number" class="form-control" id="slidesPerLesson" min="5" max="50" step="5" value="10">
+                            </div>
+                            
+                            <div class="form-check mb-3 preference-placeholder">
+                                <input class="form-check-input" type="checkbox" id="includeImages" checked>
+                                <label class="form-check-label" for="includeImages">
+                                    Includi suggerimenti per immagini nelle slide
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Sezione Avanzate -->
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">
+                                <i class="bi bi-code-slash"></i> Impostazioni Avanzate
+                            </h6>
+                            
+                            <div class="mb-3">
+                                <label for="coursesDir" class="form-label">Directory Corsi</label>
+                                <input type="text" class="form-control" id="coursesDir" placeholder="courses" readonly>
+                                <small class="form-text text-muted">Directory dove vengono salvati i file dei corsi</small>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="mdSourceDir" class="form-label">Directory File Markdown</label>
+                                <input type="text" class="form-control" id="mdSourceDir" placeholder="MD" readonly>
+                                <small class="form-text text-muted">Directory da cui vengono caricati i file .md</small>
+                            </div>
+                            
+                            <div class="form-check mb-3 preference-placeholder">
+                                <input class="form-check-input" type="checkbox" id="enableDebugLogs">
+                                <label class="form-check-label" for="enableDebugLogs">
+                                    Abilita log di debug nella console
+                                </label>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="button" class="btn btn-primary" onclick="savePreferences()">
+                        <i class="bi bi-save"></i> Salva Preferenze
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/it.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+
