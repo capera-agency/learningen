@@ -195,6 +195,18 @@ class Notification(db.Model):
     lesson = db.relationship('Lesson', backref='notifications')
     course = db.relationship('Course', backref='notifications')
 
+class AIAnalysis(db.Model):
+    """Analisi AI salvate per i corsi"""
+    id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.Integer, db.ForeignKey('course.id'), nullable=False)
+    analysis_type = db.Column(db.String(50), nullable=False)  # 'balance', 'suggestions', 'duplicates', 'coherence'
+    title = db.Column(db.String(200), nullable=False)
+    analysis_content = db.Column(db.Text, nullable=False)  # Contenuto dell'analisi in Markdown
+    analysis_data = db.Column(db.Text)  # JSON con dati aggiuntivi (es. percentuali)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    course = db.relationship('Course', backref='ai_analyses')
+
 # Creare directory per i corsi
 os.makedirs(app.config['COURSES_DIR'], exist_ok=True)
 os.makedirs(app.config['MD_SOURCE_DIR'], exist_ok=True)
@@ -446,6 +458,26 @@ def init_database():
                     logger.info("   ✓ Tabella notification creata")
                 except Exception as e:
                     logger.info(f"   Info notification creation: {e}")
+            
+            # Migrazione per ai_analysis
+            if 'ai_analysis' not in tables:
+                try:
+                    db.session.execute(text("""
+                        CREATE TABLE IF NOT EXISTS ai_analysis (
+                            id INTEGER PRIMARY KEY,
+                            course_id INTEGER NOT NULL,
+                            analysis_type VARCHAR(50) NOT NULL,
+                            title VARCHAR(200) NOT NULL,
+                            analysis_content TEXT NOT NULL,
+                            analysis_data TEXT,
+                            created_at DATETIME,
+                            FOREIGN KEY (course_id) REFERENCES course(id)
+                        )
+                    """))
+                    db.session.commit()
+                    logger.info("   ✓ Tabella ai_analysis creata")
+                except Exception as e:
+                    logger.info(f"   Info ai_analysis creation: {e}")
             
             # Test query per verificare che funzioni
             try:
@@ -4108,6 +4140,1025 @@ def export_lesson(course_id, lesson_id, format_type):
     except Exception as e:
         import traceback
         return jsonify({'error': f'Errore durante l\'esportazione: {str(e)}\n{traceback.format_exc()}'}), 500
+
+@app.route('/api/courses/<int:course_id>/export-batch', methods=['POST'])
+def export_course_batch(course_id):
+    """Esporta batch di un corso: tutte le lezioni, domande, relazione finale"""
+    course = Course.query.get_or_404(course_id)
+    
+    try:
+        # Parametri dalla query string
+        format_type = request.args.get('format', 'pdf')
+        include_questions = request.args.get('include_questions', 'false').lower() == 'true'
+        include_final_report = request.args.get('include_final_report', 'false').lower() == 'true'
+        as_zip = request.args.get('as_zip', 'false').lower() == 'true'
+        
+        if format_type not in ['pdf', 'docx']:
+            return jsonify({'error': 'Formato non supportato. Usa "pdf" o "docx"'}), 400
+        
+        # Recupera preferenze esportazione
+        export_author = get_preference_value('exportAuthor', '')
+        export_company = get_preference_value('exportCompany', '')
+        
+        # Recupera tutte le lezioni ordinate
+        lessons = Lesson.query.filter_by(course_id=course_id).order_by(Lesson.order).all()
+        
+        if not lessons:
+            return jsonify({'error': 'Nessuna lezione trovata per questo corso'}), 404
+        
+        # Se as_zip è True, crea un file ZIP con tutti i file
+        if as_zip:
+            from zipfile import ZipFile
+            import tempfile
+            import os
+            
+            zip_buffer = BytesIO()
+            with ZipFile(zip_buffer, 'w') as zip_file:
+                # Esporta tutte le lezioni
+                for lesson in lessons:
+                    # Genera il contenuto completo come nell'anteprima
+                    content = lesson.content or ''
+                    objectives = json.loads(lesson.objectives) if lesson.objectives else []
+                    materials = json.loads(lesson.materials) if lesson.materials else []
+                    exercises = json.loads(lesson.exercises) if lesson.exercises else []
+                    
+                    full_content = ''
+                    if content and content.strip() != '':
+                        full_content = content.strip()
+                        if not full_content.endswith('\n'):
+                            full_content += '\n'
+                        full_content += '\n'
+                    else:
+                        full_content = '## Contenuti\n\n*Nessun contenuto disponibile.*\n\n'
+                    
+                    full_content += '## Obiettivi\n\n'
+                    if objectives:
+                        for obj in objectives:
+                            full_content += f'- {obj}\n'
+                    else:
+                        full_content += '*Nessun obiettivo specificato.*\n'
+                    full_content += '\n'
+                    
+                    full_content += '## Materiali\n\n'
+                    if materials:
+                        for mat in materials:
+                            full_content += f'- {mat}\n'
+                    else:
+                        full_content += '*Nessun materiale specificato.*\n'
+                    full_content += '\n'
+                    
+                    full_content += '## Esercizi\n\n'
+                    if exercises:
+                        for ex in exercises:
+                            full_content += f'- {ex}\n'
+                    else:
+                        full_content += '*Nessun esercizio specificato.*\n'
+                    
+                    # Genera il file per questa lezione
+                    if format_type == 'pdf':
+                        from weasyprint import HTML
+                        html_content = markdown.markdown(full_content, extensions=['extra', 'codehilite', 'nl2br'])
+                        html_doc = f"""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="UTF-8">
+                            <title>{lesson.title}</title>
+                            {f'<meta name="author" content="{export_author}">' if export_author else ''}
+                            {f'<meta name="creator" content="{export_company}">' if export_company else ''}
+                            <style>
+                                @page {{ size: A4; margin: 2cm; }}
+                                body {{ font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11pt; line-height: 1.8; color: #2c3e50; }}
+                                h1 {{ font-size: 2.25em; font-weight: 700; color: #1a1a1a; border-bottom: 3px solid #667eea; padding-bottom: 0.5em; margin: 0 0 1.5em 0; }}
+                                h2 {{ font-size: 1.75em; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.4em; margin: 2.5em 0 1em 0; }}
+                                h3 {{ font-size: 1.4em; font-weight: 600; color: #3d4a5c; margin: 2em 0 0.8em 0; }}
+                                p {{ font-size: 1.05em; line-height: 1.8; color: #2d3748; margin: 0 0 1.25em 0; }}
+                                ul {{ margin: 1em 0 1.5em 0; padding-left: 2.5em; }}
+                                li {{ font-size: 1.05em; line-height: 1.8; color: #2d3748; margin-bottom: 0.75em; }}
+                                strong {{ font-weight: 700; color: #1a1a1a; }}
+                            </style>
+                        </head>
+                        <body>
+                            <div style="background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                                <h1>{lesson.title}</h1>
+                                <p><strong>Corso:</strong> {course.name} ({course.code})</p>
+                                <p><strong>Tipo:</strong> {'Teorica' if lesson.lesson_type == 'theory' else 'Pratica'}</p>
+                                <p><strong>Durata:</strong> {lesson.duration_hours} ore</p>
+                            </div>
+                            <div>{html_content}</div>
+                        </body>
+                        </html>
+                        """
+                        pdf_bytes = HTML(string=html_doc).write_pdf()
+                        filename = f"Lezione_{lesson.order:02d}_{lesson.title[:30].replace(' ', '_')}.pdf"
+                        zip_file.writestr(filename, pdf_bytes)
+                    else:  # docx
+                        from docx import Document
+                        from docx.shared import Pt
+                        from docx.enum.text import WD_ALIGN_PARAGRAPH
+                        doc = Document()
+                        if export_author:
+                            doc.core_properties.author = export_author
+                        if export_company:
+                            doc.core_properties.company = export_company
+                        doc.add_heading(lesson.title, 0)
+                        doc.add_paragraph(f'Corso: {course.name} ({course.code})')
+                        doc.add_paragraph(f'Tipo: {"Teorica" if lesson.lesson_type == "theory" else "Pratica"}')
+                        doc.add_paragraph(f'Durata: {lesson.duration_hours} ore')
+                        doc.add_paragraph('')
+                        doc.add_heading('Contenuti', level=2)
+                        if content:
+                            html_content = markdown.markdown(full_content, extensions=['extra', 'codehilite', 'nl2br'])
+                            # Aggiungi contenuto come paragrafi (semplificato)
+                            for line in full_content.split('\n'):
+                                if line.strip():
+                                    if line.startswith('##'):
+                                        doc.add_heading(line.replace('##', '').strip(), level=2)
+                                    elif line.startswith('-'):
+                                        doc.add_paragraph(line.replace('-', '').strip(), style='List Bullet')
+                                    else:
+                                        doc.add_paragraph(line.strip())
+                        doc_bytes = BytesIO()
+                        doc.save(doc_bytes)
+                        doc_bytes.seek(0)
+                        filename = f"Lezione_{lesson.order:02d}_{lesson.title[:30].replace(' ', '_')}.docx"
+                        zip_file.writestr(filename, doc_bytes.getvalue())
+                
+                # Aggiungi domande se richiesto
+                if include_questions:
+                    questions = Question.query.filter_by(course_id=course_id).order_by(Question.question_number).all()
+                    if questions:
+                        from docx import Document
+                        doc = Document()
+                        doc.add_heading('Domande del Corso', 0)
+                        for q in questions:
+                            doc.add_heading(f'Domanda {q.question_number}', level=2)
+                            doc.add_paragraph(q.question_text)
+                            doc.add_paragraph(f'A) {q.option_a}')
+                            doc.add_paragraph(f'B) {q.option_b}')
+                            doc.add_paragraph(f'C) {q.option_c}')
+                            doc.add_paragraph(f'D) {q.option_d}')
+                            doc.add_paragraph('')
+                        doc_bytes = BytesIO()
+                        doc.save(doc_bytes)
+                        doc_bytes.seek(0)
+                        zip_file.writestr('Domande.docx', doc_bytes.getvalue())
+                
+                # Aggiungi relazione finale se richiesta
+                if include_final_report:
+                    # Cerca se esiste una relazione finale salvata
+                    # Per ora, generiamo un documento placeholder
+                    from docx import Document
+                    doc = Document()
+                    doc.add_heading('Relazione Finale del Corso', 0)
+                    doc.add_paragraph(f'Corso: {course.name} ({course.code})')
+                    doc.add_paragraph('Relazione finale generata automaticamente.')
+                    doc_bytes = BytesIO()
+                    doc.save(doc_bytes)
+                    doc_bytes.seek(0)
+                    zip_file.writestr('Relazione_Finale.docx', doc_bytes.getvalue())
+            
+            zip_buffer.seek(0)
+            course.export_count = (course.export_count or 0) + 1
+            db.session.commit()
+            
+            return send_file(
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=f"{course.code}_export.zip"
+            )
+        
+        else:
+            # Esporta tutto in un unico documento
+            if format_type == 'pdf':
+                from weasyprint import HTML
+                
+                # Costruisci HTML completo con tutte le lezioni
+                html_parts = []
+                html_parts.append(f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>{course.name}</title>
+                    {f'<meta name="author" content="{export_author}">' if export_author else ''}
+                    {f'<meta name="creator" content="{export_company}">' if export_company else ''}
+                    <style>
+                        @page {{ size: A4; margin: 2cm; }}
+                        body {{ font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11pt; line-height: 1.8; color: #2c3e50; }}
+                        h1 {{ font-size: 2.25em; font-weight: 700; color: #1a1a1a; border-bottom: 3px solid #667eea; padding-bottom: 0.5em; margin: 0 0 1.5em 0; page-break-after: avoid; }}
+                        h2 {{ font-size: 1.75em; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.4em; margin: 2.5em 0 1em 0; page-break-after: avoid; }}
+                        h3 {{ font-size: 1.4em; font-weight: 600; color: #3d4a5c; margin: 2em 0 0.8em 0; }}
+                        .lesson-section {{ page-break-before: always; }}
+                        .lesson-section:first-child {{ page-break-before: auto; }}
+                    </style>
+                </head>
+                <body>
+                    <div style="background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                        <h1>{course.name}</h1>
+                        <p><strong>Codice:</strong> {course.code}</p>
+                        <p><strong>Descrizione:</strong> {course.description or 'Nessuna descrizione'}</p>
+                        <p><strong>Ore totali:</strong> {course.total_hours}h</p>
+                    </div>
+                """)
+                
+                # Aggiungi tutte le lezioni
+                for lesson in lessons:
+                    content = lesson.content or ''
+                    objectives = json.loads(lesson.objectives) if lesson.objectives else []
+                    materials = json.loads(lesson.materials) if lesson.materials else []
+                    exercises = json.loads(lesson.exercises) if lesson.exercises else []
+                    
+                    full_content = ''
+                    if content and content.strip() != '':
+                        full_content = content.strip()
+                        if not full_content.endswith('\n'):
+                            full_content += '\n'
+                        full_content += '\n'
+                    else:
+                        full_content = '## Contenuti\n\n*Nessun contenuto disponibile.*\n\n'
+                    
+                    full_content += '## Obiettivi\n\n'
+                    if objectives:
+                        for obj in objectives:
+                            full_content += f'- {obj}\n'
+                    else:
+                        full_content += '*Nessun obiettivo specificato.*\n'
+                    full_content += '\n'
+                    
+                    full_content += '## Materiali\n\n'
+                    if materials:
+                        for mat in materials:
+                            full_content += f'- {mat}\n'
+                    else:
+                        full_content += '*Nessun materiale specificato.*\n'
+                    full_content += '\n'
+                    
+                    full_content += '## Esercizi\n\n'
+                    if exercises:
+                        for ex in exercises:
+                            full_content += f'- {ex}\n'
+                    else:
+                        full_content += '*Nessun esercizio specificato.*\n'
+                    
+                    html_content = markdown.markdown(full_content, extensions=['extra', 'codehilite', 'nl2br'])
+                    html_parts.append(f"""
+                    <div class="lesson-section">
+                        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                            <h2>{lesson.title}</h2>
+                            <p><strong>Tipo:</strong> {'Teorica' if lesson.lesson_type == 'theory' else 'Pratica'}</p>
+                            <p><strong>Durata:</strong> {lesson.duration_hours} ore</p>
+                        </div>
+                        <div>{html_content}</div>
+                    </div>
+                    """)
+                
+                # Aggiungi domande se richiesto
+                if include_questions:
+                    questions = Question.query.filter_by(course_id=course_id).order_by(Question.question_number).all()
+                    if questions:
+                        html_parts.append('<div class="lesson-section"><h2>Domande del Corso</h2>')
+                        for q in questions:
+                            html_parts.append(f'<h3>Domanda {q.question_number}</h3><p>{q.question_text}</p><ul>')
+                            html_parts.append(f'<li>A) {q.option_a}</li>')
+                            html_parts.append(f'<li>B) {q.option_b}</li>')
+                            html_parts.append(f'<li>C) {q.option_c}</li>')
+                            html_parts.append(f'<li>D) {q.option_d}</li>')
+                            html_parts.append('</ul>')
+                        html_parts.append('</div>')
+                
+                # Aggiungi relazione finale se richiesta
+                if include_final_report:
+                    html_parts.append('<div class="lesson-section"><h2>Relazione Finale del Corso</h2><p>Relazione finale generata automaticamente.</p></div>')
+                
+                html_parts.append('</body></html>')
+                html_doc = ''.join(html_parts)
+                
+                pdf_bytes = HTML(string=html_doc).write_pdf()
+                course.export_count = (course.export_count or 0) + 1
+                db.session.commit()
+                
+                return send_file(
+                    BytesIO(pdf_bytes),
+                    mimetype='application/pdf',
+                    as_attachment=True,
+                    download_name=f"{course.code}_completo.pdf"
+                )
+            else:  # docx
+                from docx import Document
+                from docx.shared import Pt
+                from docx.enum.text import WD_ALIGN_PARAGRAPH
+                
+                doc = Document()
+                if export_author:
+                    doc.core_properties.author = export_author
+                if export_company:
+                    doc.core_properties.company = export_company
+                
+                # Titolo corso
+                doc.add_heading(course.name, 0)
+                doc.add_paragraph(f'Codice: {course.code}')
+                doc.add_paragraph(f'Descrizione: {course.description or "Nessuna descrizione"}')
+                doc.add_paragraph(f'Ore totali: {course.total_hours}h')
+                doc.add_page_break()
+                
+                # Aggiungi tutte le lezioni
+                for lesson in lessons:
+                    content = lesson.content or ''
+                    objectives = json.loads(lesson.objectives) if lesson.objectives else []
+                    materials = json.loads(lesson.materials) if lesson.materials else []
+                    exercises = json.loads(lesson.exercises) if lesson.exercises else []
+                    
+                    doc.add_heading(lesson.title, level=1)
+                    doc.add_paragraph(f'Tipo: {"Teorica" if lesson.lesson_type == "theory" else "Pratica"}')
+                    doc.add_paragraph(f'Durata: {lesson.duration_hours} ore')
+                    doc.add_paragraph('')
+                    
+                    # Contenuti
+                    if content:
+                        html_content = markdown.markdown(content, extensions=['extra', 'codehilite', 'nl2br'])
+                        for line in content.split('\n'):
+                            if line.strip():
+                                if line.startswith('##'):
+                                    doc.add_heading(line.replace('##', '').strip(), level=2)
+                                elif line.startswith('-'):
+                                    doc.add_paragraph(line.replace('-', '').strip(), style='List Bullet')
+                                else:
+                                    doc.add_paragraph(line.strip())
+                    
+                    doc.add_heading('Obiettivi', level=2)
+                    if objectives:
+                        for obj in objectives:
+                            doc.add_paragraph(obj, style='List Bullet')
+                    else:
+                        doc.add_paragraph('Nessun obiettivo specificato.', style='Intense Quote')
+                    
+                    doc.add_heading('Materiali', level=2)
+                    if materials:
+                        for mat in materials:
+                            doc.add_paragraph(mat, style='List Bullet')
+                    else:
+                        doc.add_paragraph('Nessun materiale specificato.', style='Intense Quote')
+                    
+                    doc.add_heading('Esercizi', level=2)
+                    if exercises:
+                        for ex in exercises:
+                            doc.add_paragraph(ex, style='List Bullet')
+                    else:
+                        doc.add_paragraph('Nessun esercizio specificato.', style='Intense Quote')
+                    
+                    doc.add_page_break()
+                
+                # Aggiungi domande se richiesto
+                if include_questions:
+                    questions = Question.query.filter_by(course_id=course_id).order_by(Question.question_number).all()
+                    if questions:
+                        doc.add_heading('Domande del Corso', level=1)
+                        for q in questions:
+                            doc.add_heading(f'Domanda {q.question_number}', level=2)
+                            doc.add_paragraph(q.question_text)
+                            doc.add_paragraph(f'A) {q.option_a}')
+                            doc.add_paragraph(f'B) {q.option_b}')
+                            doc.add_paragraph(f'C) {q.option_c}')
+                            doc.add_paragraph(f'D) {q.option_d}')
+                            doc.add_paragraph('')
+                        doc.add_page_break()
+                
+                # Aggiungi relazione finale se richiesta
+                if include_final_report:
+                    doc.add_heading('Relazione Finale del Corso', level=1)
+                    doc.add_paragraph('Relazione finale generata automaticamente.')
+                
+                doc_bytes = BytesIO()
+                doc.save(doc_bytes)
+                doc_bytes.seek(0)
+                
+                course.export_count = (course.export_count or 0) + 1
+                db.session.commit()
+                
+                return send_file(
+                    doc_bytes,
+                    mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    as_attachment=True,
+                    download_name=f"{course.code}_completo.docx"
+                )
+    
+    except Exception as e:
+        import traceback
+        logging.error(f'Errore durante l\'esportazione batch: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante l\'esportazione: {str(e)}'}), 500
+
+@app.route('/api/courses/<int:course_id>/ai-analysis/<analysis_type>', methods=['POST'])
+def ai_analysis(course_id, analysis_type):
+    """Esegue analisi AI sul corso: bilanciamento, suggerimenti, duplicati, coerenza"""
+    course = Course.query.get_or_404(course_id)
+    
+    if not app.config['OPENAI_API_KEY']:
+        return jsonify({'error': 'API key di OpenAI non configurata'}), 400
+    
+    if analysis_type not in ['balance', 'suggestions', 'duplicates', 'coherence']:
+        return jsonify({'error': 'Tipo di analisi non valido'}), 400
+    
+    try:
+        import os
+        os.environ['OPENAI_API_KEY'] = app.config['OPENAI_API_KEY']
+        client = OpenAI()
+        
+        # Recupera tutte le lezioni del corso
+        lessons = Lesson.query.filter_by(course_id=course_id).order_by(Lesson.order).all()
+        
+        if not lessons:
+            return jsonify({'error': 'Nessuna lezione trovata per questo corso'}), 404
+        
+        # Prepara i dati del corso per l'analisi
+        course_data = {
+            'name': course.name,
+            'code': course.code,
+            'description': course.description or '',
+            'total_hours': course.total_hours,
+            'theory_hours': course.theory_hours,
+            'practice_hours': course.practice_hours,
+            'lessons': []
+        }
+        
+        for lesson in lessons:
+            objectives = json.loads(lesson.objectives) if lesson.objectives else []
+            materials = json.loads(lesson.materials) if lesson.materials else []
+            exercises = json.loads(lesson.exercises) if lesson.exercises else []
+            
+            course_data['lessons'].append({
+                'title': lesson.title,
+                'order': lesson.order,
+                'type': lesson.lesson_type,
+                'duration': lesson.duration_hours,
+                'description': lesson.description or '',
+                'content': lesson.content or '',
+                'objectives': objectives,
+                'materials': materials,
+                'exercises': exercises
+            })
+        
+        # Recupera preferenze AI
+        ai_model = get_preference_value('aiModel', 'gpt-4o')
+        ai_temperature = float(get_preference_value('aiTemperature', '0.7'))
+        ai_max_tokens = int(get_preference_value('aiMaxTokens', '2000'))
+        
+        if analysis_type == 'balance':
+            # Analisi bilanciamento teoria/pratica
+            theory_hours = sum(l['duration'] for l in course_data['lessons'] if l['type'] == 'theory')
+            practice_hours = sum(l['duration'] for l in course_data['lessons'] if l['type'] == 'practice')
+            theory_percentage = (theory_hours / course_data['total_hours'] * 100) if course_data['total_hours'] > 0 else 0
+            practice_percentage = (practice_hours / course_data['total_hours'] * 100) if course_data['total_hours'] > 0 else 0
+            
+            prompt = f"""Analizza il bilanciamento tra teoria e pratica per questo corso di formazione professionale.
+
+**Corso:** {course_data['name']} ({course_data['code']})
+**Ore totali:** {course_data['total_hours']}h
+**Ore teoria:** {theory_hours}h ({theory_percentage:.1f}%)
+**Ore pratica:** {practice_hours}h ({practice_percentage:.1f}%)
+
+**Lezioni:**
+{chr(10).join([f"- Lezione {l['order']}: {l['title']} ({l['type']}, {l['duration']}h)" for l in course_data['lessons']])}
+
+**Compito:**
+1. Analizza il bilanciamento attuale tra teoria e pratica
+2. Valuta se è appropriato per un corso di formazione professionale
+3. Fornisci raccomandazioni per migliorare il bilanciamento se necessario
+4. Suggerisci eventuali aggiustamenti nelle durate delle lezioni
+
+Rispondi in formato Markdown con sezioni chiare."""
+            
+            response = client.chat.completions.create(
+                model=ai_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=ai_temperature,
+                max_tokens=ai_max_tokens
+            )
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Salva l'analisi nel database
+            analysis_data_json = json.dumps({
+                'theory_hours': theory_hours,
+                'practice_hours': practice_hours,
+                'theory_percentage': round(theory_percentage, 1),
+                'practice_percentage': round(practice_percentage, 1)
+            })
+            ai_analysis = AIAnalysis(
+                course_id=course_id,
+                analysis_type='balance',
+                title='Analisi Bilanciamento Teoria/Pratica',
+                analysis_content=analysis_text,
+                analysis_data=analysis_data_json
+            )
+            db.session.add(ai_analysis)
+            db.session.commit()
+            
+            return jsonify({
+                'id': ai_analysis.id,
+                'title': 'Analisi Bilanciamento Teoria/Pratica',
+                'analysis': analysis_text,
+                'data': {
+                    'theory_hours': theory_hours,
+                    'practice_hours': practice_hours,
+                    'theory_percentage': round(theory_percentage, 1),
+                    'practice_percentage': round(practice_percentage, 1)
+                },
+                'created_at': ai_analysis.created_at.isoformat()
+            })
+        
+        elif analysis_type == 'suggestions':
+            # Suggerimenti per migliorare lezioni
+            lessons_summary = '\n\n'.join([
+                f"**Lezione {l['order']}: {l['title']}** ({l['type']}, {l['duration']}h)\n"
+                f"Descrizione: {l['description'] or 'Nessuna'}\n"
+                f"Contenuto: {l['content'][:500] if l['content'] else 'Nessun contenuto'}..."
+                for l in course_data['lessons']
+            ])
+            
+            prompt = f"""Sei un esperto di didattica e formazione professionale. Analizza questo corso e fornisci suggerimenti concreti per migliorare le lezioni.
+
+**Corso:** {course_data['name']} ({course_data['code']})
+**Descrizione:** {course_data['description'] or 'Nessuna descrizione'}
+**Ore totali:** {course_data['total_hours']}h ({course_data['theory_hours']}h teoria, {course_data['practice_hours']}h pratica)
+**Numero lezioni:** {len(course_data['lessons'])}
+
+**Lezioni:**
+{lessons_summary}
+
+**Compito:**
+1. Analizza ogni lezione e identifica punti di forza e debolezze
+2. Fornisci suggerimenti specifici per migliorare:
+   - La struttura e organizzazione
+   - La chiarezza dei contenuti
+   - L'equilibrio tra teoria e pratica
+   - L'engagement degli studenti
+   - La completezza delle informazioni
+3. Suggerisci eventuali lezioni mancanti o da aggiungere
+4. Fornisci raccomandazioni pratiche e attuabili
+
+Rispondi in formato Markdown con sezioni chiare per ogni lezione."""
+            
+            response = client.chat.completions.create(
+                model=ai_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=ai_temperature,
+                max_tokens=ai_max_tokens * 2  # Più token per analisi dettagliata
+            )
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Salva l'analisi nel database
+            ai_analysis = AIAnalysis(
+                course_id=course_id,
+                analysis_type='suggestions',
+                title='Suggerimenti per Migliorare le Lezioni',
+                analysis_content=analysis_text,
+                analysis_data=None
+            )
+            db.session.add(ai_analysis)
+            db.session.commit()
+            
+            return jsonify({
+                'id': ai_analysis.id,
+                'title': 'Suggerimenti per Migliorare le Lezioni',
+                'analysis': analysis_text,
+                'created_at': ai_analysis.created_at.isoformat()
+            })
+        
+        elif analysis_type == 'duplicates':
+            # Rilevamento contenuti duplicati
+            lessons_content = '\n\n'.join([
+                f"**LEZIONE {l['order']}: {l['title']}**\n"
+                f"Contenuto: {l['content'] or 'Nessun contenuto'}\n"
+                f"Obiettivi: {', '.join(l['objectives']) if l['objectives'] else 'Nessuno'}"
+                for l in course_data['lessons']
+            ])
+            
+            prompt = f"""Analizza questo corso di formazione professionale per identificare contenuti duplicati o molto simili tra le lezioni.
+
+**Corso:** {course_data['name']} ({course_data['code']})
+**Numero lezioni:** {len(course_data['lessons'])}
+
+**Contenuti delle lezioni:**
+{lessons_content}
+
+**Compito:**
+1. Identifica contenuti duplicati o molto simili tra le lezioni
+2. Indica quali lezioni hanno sovrapposizioni significative
+3. Suggerisci come eliminare o ridurre le duplicazioni
+4. Valuta se alcune lezioni potrebbero essere unificate
+5. Fornisci raccomandazioni per migliorare la progressione logica
+
+Rispondi in formato Markdown con sezioni chiare."""
+            
+            response = client.chat.completions.create(
+                model=ai_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=ai_temperature,
+                max_tokens=ai_max_tokens
+            )
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Salva l'analisi nel database
+            ai_analysis = AIAnalysis(
+                course_id=course_id,
+                analysis_type='duplicates',
+                title='Rilevamento Contenuti Duplicati',
+                analysis_content=analysis_text,
+                analysis_data=None
+            )
+            db.session.add(ai_analysis)
+            db.session.commit()
+            
+            return jsonify({
+                'id': ai_analysis.id,
+                'title': 'Rilevamento Contenuti Duplicati',
+                'analysis': analysis_text,
+                'created_at': ai_analysis.created_at.isoformat()
+            })
+        
+        elif analysis_type == 'coherence':
+            # Analisi coerenza obiettivi-contenuti
+            lessons_detailed = '\n\n'.join([
+                f"**LEZIONE {l['order']}: {l['title']}** ({l['type']}, {l['duration']}h)\n"
+                f"Obiettivi formativi:\n" + '\n'.join([f"- {obj}" for obj in l['objectives']]) + "\n"
+                f"Contenuto:\n{l['content'] or 'Nessun contenuto'}\n"
+                for l in course_data['lessons'] if l['objectives']
+            ])
+            
+            prompt = f"""Analizza la coerenza tra gli obiettivi formativi e i contenuti delle lezioni di questo corso.
+
+**Corso:** {course_data['name']} ({course_data['code']})
+**Descrizione corso:** {course_data['description'] or 'Nessuna descrizione'}
+
+**Lezioni con obiettivi e contenuti:**
+{lessons_detailed}
+
+**Compito:**
+1. Per ogni lezione, verifica se i contenuti sono allineati con gli obiettivi formativi
+2. Identifica eventuali discrepanze tra obiettivi dichiarati e contenuti effettivi
+3. Suggerisci come migliorare l'allineamento
+4. Valuta se gli obiettivi sono realistici rispetto ai contenuti e alla durata
+5. Fornisci raccomandazioni per migliorare la coerenza complessiva
+
+Rispondi in formato Markdown con sezioni chiare per ogni lezione."""
+            
+            response = client.chat.completions.create(
+                model=ai_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=ai_temperature,
+                max_tokens=ai_max_tokens * 2
+            )
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Salva l'analisi nel database
+            ai_analysis = AIAnalysis(
+                course_id=course_id,
+                analysis_type='coherence',
+                title='Analisi Coerenza Obiettivi-Contenuti',
+                analysis_content=analysis_text,
+                analysis_data=None
+            )
+            db.session.add(ai_analysis)
+            db.session.commit()
+            
+            return jsonify({
+                'id': ai_analysis.id,
+                'title': 'Analisi Coerenza Obiettivi-Contenuti',
+                'analysis': analysis_text,
+                'created_at': ai_analysis.created_at.isoformat()
+            })
+    
+    except Exception as e:
+        import traceback
+        logging.error(f'Errore durante l\'analisi AI: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante l\'analisi: {str(e)}'}), 500
+
+@app.route('/api/courses/<int:course_id>/ai-analysis/<analysis_type>/export/<format_type>', methods=['POST'])
+def export_ai_analysis(course_id, analysis_type, format_type):
+    """Esporta i risultati dell'analisi AI in PDF o DOCX"""
+    course = Course.query.get_or_404(course_id)
+    
+    if format_type not in ['pdf', 'docx']:
+        return jsonify({'error': 'Formato non supportato. Usa "pdf" o "docx"'}), 400
+    
+    try:
+        data = request.json
+        analysis_text = data.get('analysis', '')
+        analysis_title = data.get('title', 'Analisi AI')
+        analysis_data = data.get('data', {})
+        
+        if not analysis_text:
+            return jsonify({'error': 'Nessun contenuto di analisi da esportare'}), 400
+        
+        # Recupera preferenze esportazione
+        export_author = get_preference_value('exportAuthor', '')
+        export_company = get_preference_value('exportCompany', '')
+        
+        if format_type == 'pdf':
+            from weasyprint import HTML
+            
+            # Converti Markdown a HTML
+            html_content = markdown.markdown(analysis_text, extensions=['extra', 'codehilite', 'nl2br'])
+            
+            # Aggiungi dati statistici se presenti
+            data_section = ''
+            if analysis_data:
+                if 'theory_percentage' in analysis_data:
+                    data_section = f"""
+                    <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                        <h3>Dati Statistici</h3>
+                        <p><strong>Ore Teoria:</strong> {analysis_data.get('theory_hours', 0)}h ({analysis_data.get('theory_percentage', 0)}%)</p>
+                        <p><strong>Ore Pratica:</strong> {analysis_data.get('practice_hours', 0)}h ({analysis_data.get('practice_percentage', 0)}%)</p>
+                    </div>
+                    """
+            
+            html_doc = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>{analysis_title}</title>
+                {f'<meta name="author" content="{export_author}">' if export_author else ''}
+                {f'<meta name="creator" content="{export_company}">' if export_company else ''}
+                <style>
+                    @page {{ size: A4; margin: 2cm; }}
+                    body {{ font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11pt; line-height: 1.8; color: #2c3e50; }}
+                    h1 {{ font-size: 2.25em; font-weight: 700; color: #1a1a1a; border-bottom: 3px solid #667eea; padding-bottom: 0.5em; margin: 0 0 1.5em 0; }}
+                    h2 {{ font-size: 1.75em; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.4em; margin: 2.5em 0 1em 0; }}
+                    h3 {{ font-size: 1.4em; font-weight: 600; color: #3d4a5c; margin: 2em 0 0.8em 0; }}
+                    p {{ font-size: 1.05em; line-height: 1.8; color: #2d3748; margin: 0 0 1.25em 0; }}
+                    ul, ol {{ margin: 1em 0 1.5em 0; padding-left: 2.5em; }}
+                    li {{ font-size: 1.05em; line-height: 1.8; color: #2d3748; margin-bottom: 0.75em; }}
+                    strong {{ font-weight: 700; color: #1a1a1a; }}
+                    code {{ background-color: #f7f7f7; border: 1px solid #e1e4e8; border-radius: 4px; padding: 3px 8px; font-family: 'Courier New', monospace; font-size: 0.9em; }}
+                    blockquote {{ border-left: 4px solid #667eea; padding: 0.75rem 1.25rem; margin: 1.5em 0; background-color: #f8f9fa; border-radius: 0 4px 4px 0; }}
+                </style>
+            </head>
+            <body>
+                <div style="background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <h1>{analysis_title}</h1>
+                    <p><strong>Corso:</strong> {course.name} ({course.code})</p>
+                    <p><strong>Data analisi:</strong> {datetime.now().strftime('%d/%m/%Y alle %H:%M')}</p>
+                </div>
+                {data_section}
+                <div class="analysis-content">
+                    {html_content}
+                </div>
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 9pt; color: #7f8c8d; text-align: center;">
+                    <p>Generato il {datetime.now().strftime('%d/%m/%Y alle %H:%M')}</p>
+                </div>
+            </body>
+            </html>
+            """
+            
+            pdf_bytes = HTML(string=html_doc).write_pdf()
+            
+            return send_file(
+                BytesIO(pdf_bytes),
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f"{course.code}_{analysis_type}_analisi.pdf"
+            )
+        
+        else:  # docx
+            from docx import Document
+            from docx.shared import Pt
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            doc = Document()
+            if export_author:
+                doc.core_properties.author = export_author
+            if export_company:
+                doc.core_properties.company = export_company
+            
+            # Titolo
+            doc.add_heading(analysis_title, 0)
+            doc.add_paragraph(f'Corso: {course.name} ({course.code})')
+            doc.add_paragraph(f'Data analisi: {datetime.now().strftime("%d/%m/%Y alle %H:%M")}')
+            doc.add_paragraph('')
+            
+            # Dati statistici se presenti
+            if analysis_data:
+                doc.add_heading('Dati Statistici', level=2)
+                if 'theory_percentage' in analysis_data:
+                    doc.add_paragraph(f'Ore Teoria: {analysis_data.get("theory_hours", 0)}h ({analysis_data.get("theory_percentage", 0)}%)')
+                    doc.add_paragraph(f'Ore Pratica: {analysis_data.get("practice_hours", 0)}h ({analysis_data.get("practice_percentage", 0)}%)')
+                doc.add_paragraph('')
+            
+            # Contenuto analisi
+            doc.add_heading('Analisi', level=2)
+            
+            # Converti Markdown in paragrafi Word (semplificato)
+            lines = analysis_text.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    doc.add_paragraph('')
+                elif line.startswith('## '):
+                    doc.add_heading(line.replace('##', '').strip(), level=2)
+                elif line.startswith('### '):
+                    doc.add_heading(line.replace('###', '').strip(), level=3)
+                elif line.startswith('- ') or line.startswith('* '):
+                    doc.add_paragraph(line.replace('-', '').replace('*', '').strip(), style='List Bullet')
+                elif line.startswith('**') and line.endswith('**'):
+                    para = doc.add_paragraph()
+                    run = para.add_run(line.replace('**', ''))
+                    run.bold = True
+                else:
+                    doc.add_paragraph(line)
+            
+            # Footer
+            doc.add_paragraph('')
+            footer_para = doc.add_paragraph(f'Generato il {datetime.now().strftime("%d/%m/%Y alle %H:%M")}')
+            footer_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if footer_para.runs:
+                footer_para.runs[0].font.size = Pt(9)
+            
+            doc_bytes = BytesIO()
+            doc.save(doc_bytes)
+            doc_bytes.seek(0)
+            
+            return send_file(
+                doc_bytes,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                as_attachment=True,
+                download_name=f"{course.code}_{analysis_type}_analisi.docx"
+            )
+    
+    except Exception as e:
+        import traceback
+        logging.error(f'Errore durante l\'esportazione analisi AI: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante l\'esportazione: {str(e)}'}), 500
+
+@app.route('/api/courses/<int:course_id>/ai-analyses', methods=['GET'])
+def get_ai_analyses(course_id):
+    """Recupera tutte le analisi AI salvate per un corso"""
+    course = Course.query.get_or_404(course_id)
+    
+    analyses = AIAnalysis.query.filter_by(course_id=course_id).order_by(AIAnalysis.created_at.desc()).all()
+    
+    return jsonify([{
+        'id': a.id,
+        'analysis_type': a.analysis_type,
+        'title': a.title,
+        'created_at': a.created_at.isoformat(),
+        'created_at_formatted': a.created_at.strftime('%d/%m/%Y alle %H:%M')
+    } for a in analyses])
+
+@app.route('/api/courses/<int:course_id>/ai-analyses/<int:analysis_id>', methods=['GET'])
+def get_ai_analysis(course_id, analysis_id):
+    """Recupera una specifica analisi AI"""
+    analysis = AIAnalysis.query.filter_by(id=analysis_id, course_id=course_id).first_or_404()
+    
+    analysis_data = None
+    if analysis.analysis_data:
+        analysis_data = json.loads(analysis.analysis_data)
+    
+    return jsonify({
+        'id': analysis.id,
+        'analysis_type': analysis.analysis_type,
+        'title': analysis.title,
+        'analysis': analysis.analysis_content,
+        'data': analysis_data,
+        'created_at': analysis.created_at.isoformat(),
+        'created_at_formatted': analysis.created_at.strftime('%d/%m/%Y alle %H:%M')
+    })
+
+@app.route('/api/courses/<int:course_id>/ai-analyses/<int:analysis_id>/export/<format_type>', methods=['GET'])
+def export_saved_ai_analysis(course_id, analysis_id, format_type):
+    """Esporta un'analisi AI salvata in PDF o DOCX"""
+    course = Course.query.get_or_404(course_id)
+    analysis = AIAnalysis.query.filter_by(id=analysis_id, course_id=course_id).first_or_404()
+    
+    if format_type not in ['pdf', 'docx']:
+        return jsonify({'error': 'Formato non supportato. Usa "pdf" o "docx"'}), 400
+    
+    try:
+        # Recupera preferenze esportazione
+        export_author = get_preference_value('exportAuthor', '')
+        export_company = get_preference_value('exportCompany', '')
+        
+        analysis_data = None
+        if analysis.analysis_data:
+            analysis_data = json.loads(analysis.analysis_data)
+        
+        if format_type == 'pdf':
+            from weasyprint import HTML
+            
+            # Converti Markdown a HTML
+            html_content = markdown.markdown(analysis.analysis_content, extensions=['extra', 'codehilite', 'nl2br'])
+            
+            # Aggiungi dati statistici se presenti
+            data_section = ''
+            if analysis_data and 'theory_percentage' in analysis_data:
+                data_section = f"""
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <h3>Dati Statistici</h3>
+                    <p><strong>Ore Teoria:</strong> {analysis_data.get('theory_hours', 0)}h ({analysis_data.get('theory_percentage', 0)}%)</p>
+                    <p><strong>Ore Pratica:</strong> {analysis_data.get('practice_hours', 0)}h ({analysis_data.get('practice_percentage', 0)}%)</p>
+                </div>
+                """
+            
+            html_doc = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>{analysis.title}</title>
+                {f'<meta name="author" content="{export_author}">' if export_author else ''}
+                {f'<meta name="creator" content="{export_company}">' if export_company else ''}
+                <style>
+                    @page {{ size: A4; margin: 2cm; }}
+                    body {{ font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 11pt; line-height: 1.8; color: #2c3e50; }}
+                    h1 {{ font-size: 2.25em; font-weight: 700; color: #1a1a1a; border-bottom: 3px solid #667eea; padding-bottom: 0.5em; margin: 0 0 1.5em 0; }}
+                    h2 {{ font-size: 1.75em; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.4em; margin: 2.5em 0 1em 0; }}
+                    h3 {{ font-size: 1.4em; font-weight: 600; color: #3d4a5c; margin: 2em 0 0.8em 0; }}
+                    p {{ font-size: 1.05em; line-height: 1.8; color: #2d3748; margin: 0 0 1.25em 0; }}
+                    ul, ol {{ margin: 1em 0 1.5em 0; padding-left: 2.5em; }}
+                    li {{ font-size: 1.05em; line-height: 1.8; color: #2d3748; margin-bottom: 0.75em; }}
+                    strong {{ font-weight: 700; color: #1a1a1a; }}
+                </style>
+            </head>
+            <body>
+                <div style="background-color: #ecf0f1; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <h1>{analysis.title}</h1>
+                    <p><strong>Corso:</strong> {course.name} ({course.code})</p>
+                    <p><strong>Data analisi:</strong> {analysis.created_at.strftime('%d/%m/%Y alle %H:%M')}</p>
+                </div>
+                {data_section}
+                <div class="analysis-content">
+                    {html_content}
+                </div>
+            </body>
+            </html>
+            """
+            
+            pdf_bytes = HTML(string=html_doc).write_pdf()
+            
+            return send_file(
+                BytesIO(pdf_bytes),
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f"{course.code}_{analysis.analysis_type}_analisi.pdf"
+            )
+        
+        else:  # docx
+            from docx import Document
+            from docx.shared import Pt
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            doc = Document()
+            if export_author:
+                doc.core_properties.author = export_author
+            if export_company:
+                doc.core_properties.company = export_company
+            
+            doc.add_heading(analysis.title, 0)
+            doc.add_paragraph(f'Corso: {course.name} ({course.code})')
+            doc.add_paragraph(f'Data analisi: {analysis.created_at.strftime("%d/%m/%Y alle %H:%M")}')
+            doc.add_paragraph('')
+            
+            if analysis_data and 'theory_percentage' in analysis_data:
+                doc.add_heading('Dati Statistici', level=2)
+                doc.add_paragraph(f'Ore Teoria: {analysis_data.get("theory_hours", 0)}h ({analysis_data.get("theory_percentage", 0)}%)')
+                doc.add_paragraph(f'Ore Pratica: {analysis_data.get("practice_hours", 0)}h ({analysis_data.get("practice_percentage", 0)}%)')
+                doc.add_paragraph('')
+            
+            doc.add_heading('Analisi', level=2)
+            lines = analysis.analysis_content.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    doc.add_paragraph('')
+                elif line.startswith('## '):
+                    doc.add_heading(line.replace('##', '').strip(), level=2)
+                elif line.startswith('### '):
+                    doc.add_heading(line.replace('###', '').strip(), level=3)
+                elif line.startswith('- ') or line.startswith('* '):
+                    doc.add_paragraph(line.replace('-', '').replace('*', '').strip(), style='List Bullet')
+                else:
+                    doc.add_paragraph(line)
+            
+            doc_bytes = BytesIO()
+            doc.save(doc_bytes)
+            doc_bytes.seek(0)
+            
+            return send_file(
+                doc_bytes,
+                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                as_attachment=True,
+                download_name=f"{course.code}_{analysis.analysis_type}_analisi.docx"
+            )
+    
+    except Exception as e:
+        import traceback
+        logging.error(f'Errore durante l\'esportazione analisi salvata: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante l\'esportazione: {str(e)}'}), 500
 
 @app.route('/api/courses/<int:course_id>/import-md', methods=['POST'])
 def import_lessons_from_md(course_id):

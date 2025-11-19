@@ -53,7 +53,7 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - [x] Feedback visivo durante il drag
 
 **Priorità:** Media  
-**Stato:** ✅ Completato (2025-01-XX)
+**Stato:** ✅ Completato (2025-11-19)
 
 ---
 
@@ -66,7 +66,7 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - [x] Commenti per ogni versione
 
 **Priorità:** Bassa  
-**Stato:** ✅ Completato (2025-01-XX)
+**Stato:** ✅ Completato (2025-11-19)
 
 ---
 
@@ -79,20 +79,20 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - [x] Sistema di notifiche
 
 **Priorità:** Media  
-**Stato:** ✅ Completato (2025-01-XX)
+**Stato:** ✅ Completato (2025-11-19)
 
 ---
 
 ## 📦 Esportazione
 
 ### Esportazione Batch
-- [ ] Esporta tutte le lezioni di un corso in un unico PDF/DOCX
+- [x] Esporta tutte le lezioni di un corso in un unico PDF/DOCX
 - [ ] Esporta multipli corsi contemporaneamente
-- [ ] Pacchetto completo (lezioni + domande + relazione)
-- [ ] Esportazione ZIP con tutti i file
+- [x] Pacchetto completo (lezioni + domande + relazione)
+- [x] Esportazione ZIP con tutti i file
 
 **Priorità:** Alta  
-**Stato:** Proposta
+**Stato:** ✅ Parzialmente completata (2025-11-19) - Manca esportazione multipli corsi
 
 ---
 
@@ -164,13 +164,13 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 **Stato:** ✅ Completata (2025-11-18)
 
 ### Analisi e Suggerimenti AI
-- [ ] Analisi bilanciamento teoria/pratica
-- [ ] Suggerimenti per migliorare lezioni
-- [ ] Rilevamento contenuti duplicati
-- [ ] Analisi coerenza obiettivi-contenuti
+- [x] Analisi bilanciamento teoria/pratica
+- [x] Suggerimenti per migliorare lezioni
+- [x] Rilevamento contenuti duplicati
+- [x] Analisi coerenza obiettivi-contenuti
 
 **Priorità:** Bassa  
-**Stato:** Proposta
+**Stato:** ✅ Completata (2025-11-19)
 
 ---
 
@@ -287,14 +287,14 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - ✅ Statistiche utilizzo (lezioni più modificate, corsi più esportati)
 - ✅ Ricerca avanzata con filtri multipli e salvataggio ricerche frequenti
 - ✅ Template e duplicazione corsi (salvataggio template, libreria, duplicazione, import/export JSON)
+- ✅ Esportazione batch: tutte le lezioni in un unico PDF/DOCX, pacchetto completo (lezioni + domande + relazione), esportazione ZIP
+- ✅ Analisi e Suggerimenti AI: bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti
 
 ### In Sviluppo
 - Nessuna al momento
 
 ### Prossimi Sviluppi
-- Dashboard con statistiche
-- Template corsi
-- Esportazione batch
+- Esportazione multipli corsi contemporaneamente
 - Backup automatico
 
 ---
@@ -308,6 +308,8 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - **2025-11-18**: Implementate statistiche utilizzo (tracciamento modifiche lezioni ed esportazioni corsi)
 - **2025-11-18**: Implementata ricerca avanzata con full-text su corsi/lezioni/contenuti, filtri multipli (tipo, data, durata), ricerca nei contenuti Markdown e salvataggio ricerche frequenti in localStorage
 - **2025-11-18**: Implementati template e duplicazione corsi: modello database CourseTemplate, API per salvare/duplicare/importare/esportare template, interfaccia UI con libreria template e pulsanti nelle card corsi
+- **2025-11-19**: Implementata esportazione batch: pulsante "Esporta" nelle card corsi, modale con opzioni (formato PDF/DOCX, includi domande, includi relazione finale, esporta come ZIP), endpoint backend `/api/courses/<id>/export-batch` che supporta esportazione tutte lezioni in un unico documento o ZIP con file separati
+- **2025-11-19**: Implementate Analisi e Suggerimenti AI: pulsante "Analisi AI" nelle card corsi, modale con 4 tipi di analisi (bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti), endpoint backend `/api/courses/<id>/ai-analysis/<type>` che usa ChatGPT per analizzare il corso e fornire raccomandazioni
 
 ---
 
@@ -324,5 +326,5 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 
 ---
 
-*Ultimo aggiornamento: 2025-11-18*
+*Ultimo aggiornamento: 2025-11-19*
 

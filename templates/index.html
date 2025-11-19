@@ -714,6 +714,212 @@
             </div>
         </div>
 
+        <!-- Modal Esportazione Corso -->
+        <div class="modal fade" id="exportModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-download"></i> Esporta Corso</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <h6>Corso: <span id="exportCourseName"></span></h6>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <h6 class="border-bottom pb-2 mb-3">Opzioni di Esportazione</h6>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="exportAllLessons" checked>
+                                <label class="form-check-label" for="exportAllLessons">
+                                    <strong>Esporta tutte le lezioni</strong>
+                                    <br>
+                                    <small class="text-muted">Esporta tutte le lezioni del corso in un unico documento</small>
+                                </label>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Formato</label>
+                                <select class="form-select" id="exportFormat">
+                                    <option value="pdf">PDF</option>
+                                    <option value="docx">DOCX</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="exportQuestions">
+                                <label class="form-check-label" for="exportQuestions">
+                                    <strong>Includi Domande</strong>
+                                    <br>
+                                    <small class="text-muted">Aggiungi le domande generate per il corso</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="exportFinalReport">
+                                <label class="form-check-label" for="exportFinalReport">
+                                    <strong>Includi Relazione Finale</strong>
+                                    <br>
+                                    <small class="text-muted">Aggiungi la relazione finale del corso (se disponibile)</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="exportAsZip">
+                                <label class="form-check-label" for="exportAsZip">
+                                    <strong>Esporta come ZIP</strong>
+                                    <br>
+                                    <small class="text-muted">Crea un file ZIP con tutti i file selezionati</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="exportProgress" style="display: none;">
+                            <div class="progress mb-3">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="exportProgressBar"></div>
+                            </div>
+                            <p class="text-center text-muted" id="exportStatus">Preparazione esportazione...</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                        <button type="button" class="btn btn-success" id="startExportBtn" onclick="startExport()">
+                            <i class="bi bi-download"></i> Avvia Esportazione
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Analisi AI -->
+        <div class="modal fade" id="aiAnalysisModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><i class="bi bi-graph-up-arrow"></i> Analisi e Suggerimenti AI</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <h6>Corso: <span id="aiAnalysisCourseName"></span></h6>
+                        </div>
+                        
+                        <!-- Tab Navigation -->
+                        <ul class="nav nav-tabs mb-3" id="aiAnalysisTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="new-analysis-tab" data-bs-toggle="tab" data-bs-target="#new-analysis-pane" type="button" role="tab">
+                                    <i class="bi bi-plus-circle"></i> Nuova Analisi
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="saved-analyses-tab" data-bs-toggle="tab" data-bs-target="#saved-analyses-pane" type="button" role="tab" onclick="loadSavedAnalyses()">
+                                    <i class="bi bi-folder"></i> Analisi Salvate
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="aiAnalysisTabContent">
+                            <!-- Tab Nuova Analisi -->
+                            <div class="tab-pane fade show active" id="new-analysis-pane" role="tabpanel">
+                                <div class="mb-4">
+                                    <h6 class="border-bottom pb-2 mb-3">Seleziona Tipo di Analisi</h6>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="bi bi-balance"></i> Bilanciamento Teoria/Pratica</h6>
+                                            <p class="card-text small text-muted">Analizza la distribuzione tra lezioni teoriche e pratiche del corso</p>
+                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="runAIAnalysis('balance')">
+                                                <i class="bi bi-play-circle"></i> Analizza
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="bi bi-lightbulb"></i> Suggerimenti Miglioramento</h6>
+                                            <p class="card-text small text-muted">Ricevi suggerimenti per migliorare le lezioni del corso</p>
+                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="runAIAnalysis('suggestions')">
+                                                <i class="bi bi-play-circle"></i> Analizza
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="bi bi-files"></i> Contenuti Duplicati</h6>
+                                            <p class="card-text small text-muted">Rileva contenuti duplicati o simili tra le lezioni</p>
+                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="runAIAnalysis('duplicates')">
+                                                <i class="bi bi-play-circle"></i> Analizza
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="bi bi-check-circle"></i> Coerenza Obiettivi</h6>
+                                            <p class="card-text small text-muted">Verifica la coerenza tra obiettivi formativi e contenuti</p>
+                                            <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="runAIAnalysis('coherence')">
+                                                <i class="bi bi-play-circle"></i> Analizza
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="aiAnalysisProgress" style="display: none;">
+                            <div class="progress mb-3">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="aiAnalysisProgressBar"></div>
+                            </div>
+                            <p class="text-center text-muted" id="aiAnalysisStatus">Preparazione analisi...</p>
+                        </div>
+                        
+                        <div id="aiAnalysisResults" style="display: none;">
+                            <hr>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="mb-0">Risultati Analisi</h6>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportAIAnalysis('pdf')" id="exportAnalysisPdfBtn">
+                                        <i class="bi bi-file-pdf"></i> Esporta PDF
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-success" onclick="exportAIAnalysis('docx')" id="exportAnalysisDocxBtn">
+                                        <i class="bi bi-file-word"></i> Esporta DOCX
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="aiAnalysisResultsContent" class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;">
+                                <!-- I risultati verranno inseriti qui -->
+                            </div>
+                        </div>
+                            </div>
+                            
+                            <!-- Tab Analisi Salvate -->
+                            <div class="tab-pane fade" id="saved-analyses-pane" role="tabpanel">
+                                <div id="savedAnalysesList">
+                                    <div class="text-center text-muted py-3">
+                                        <i class="bi bi-hourglass-split"></i> Caricamento analisi salvate...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal Preferenze -->
         <div class="modal fade" id="preferencesModal" tabindex="-1">
         <div class="modal-dialog modal-lg">

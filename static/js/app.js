@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupHoursRecalculation();
     
     // Rimuovi backdrop se rimane dopo la chiusura delle modali
-    const modals = ['courseModal', 'lessonsModal', 'lessonPreviewModal', 'questionsModal', 'finalReportModal', 'trainAIModal', 'preferencesModal', 'notificationsModal', 'collaborationModal', 'versionHistoryModal', 'versionCompareModal'];
+    const modals = ['courseModal', 'lessonsModal', 'lessonPreviewModal', 'questionsModal', 'finalReportModal', 'trainAIModal', 'preferencesModal', 'notificationsModal', 'collaborationModal', 'versionHistoryModal', 'versionCompareModal', 'aiAnalysisModal', 'exportModal'];
     modals.forEach(modalId => {
         const modalElement = document.getElementById(modalId);
         if (modalElement) {
@@ -610,6 +610,9 @@ function displayCourses(courses, returnHtml = false) {
                         <button class="btn btn-sm btn-success flex-fill" onclick="createSlides(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Crea Presentazione PowerPoint">
                             <i class="bi bi-file-slides"></i> Crea Slide
                         </button>
+                        <button class="btn btn-sm btn-info flex-fill" onclick="showAIAnalysisModal(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Analisi e Suggerimenti AI">
+                            <i class="bi bi-graph-up-arrow"></i> Analisi AI
+                        </button>
                         <!-- Funzione Canva in standby
                         <button class="btn btn-sm btn-primary flex-fill" onclick="createWithCanva(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Crea Presentazione su Canva">
                             <i class="bi bi-palette"></i> Crea con Canva
@@ -638,6 +641,9 @@ function displayCourses(courses, returnHtml = false) {
                             </button>
                             <button class="btn btn-sm btn-outline-primary" onclick="duplicateCourse(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Duplica Corso">
                                 <i class="bi bi-files"></i> Duplica
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" onclick="showExportModal(${course.id}, '${course.name.replace(/'/g, "\\'")}')" title="Esporta Corso">
+                                <i class="bi bi-download"></i> Esporta
                             </button>
                         </div>
                     </div>
@@ -3993,6 +3999,429 @@ async function saveAsTemplate(courseId, courseName) {
     } catch (error) {
         console.error('Errore:', error);
         alert('Errore nella comunicazione con il server');
+    }
+}
+
+let currentExportCourseId = null;
+let currentExportCourseName = null;
+
+function showExportModal(courseId, courseName) {
+    currentExportCourseId = courseId;
+    currentExportCourseName = courseName;
+    
+    document.getElementById('exportCourseName').textContent = courseName;
+    
+    // Reset form
+    document.getElementById('exportAllLessons').checked = true;
+    document.getElementById('exportFormat').value = 'pdf';
+    document.getElementById('exportQuestions').checked = false;
+    document.getElementById('exportFinalReport').checked = false;
+    document.getElementById('exportAsZip').checked = false;
+    document.getElementById('exportProgress').style.display = 'none';
+    document.getElementById('startExportBtn').disabled = false;
+    
+    const modal = new bootstrap.Modal(document.getElementById('exportModal'));
+    modal.show();
+}
+
+async function startExport() {
+    if (!currentExportCourseId) {
+        showToast('Nessun corso selezionato', 'error');
+        return;
+    }
+    
+    const exportAllLessons = document.getElementById('exportAllLessons').checked;
+    const exportFormat = document.getElementById('exportFormat').value;
+    const exportQuestions = document.getElementById('exportQuestions').checked;
+    const exportFinalReport = document.getElementById('exportFinalReport').checked;
+    const exportAsZip = document.getElementById('exportAsZip').checked;
+    
+    if (!exportAllLessons && !exportQuestions && !exportFinalReport) {
+        showToast('Seleziona almeno un\'opzione di esportazione', 'warning');
+        return;
+    }
+    
+    // Mostra progress bar
+    document.getElementById('exportProgress').style.display = 'block';
+    document.getElementById('exportProgressBar').style.width = '0%';
+    document.getElementById('exportStatus').textContent = 'Preparazione esportazione...';
+    document.getElementById('startExportBtn').disabled = true;
+    
+    try {
+        // Prepara i parametri
+        const params = new URLSearchParams({
+            format: exportFormat,
+            include_questions: exportQuestions ? 'true' : 'false',
+            include_final_report: exportFinalReport ? 'true' : 'false',
+            as_zip: exportAsZip ? 'true' : 'false'
+        });
+        
+        // Aggiorna progress
+        document.getElementById('exportProgressBar').style.width = '30%';
+        document.getElementById('exportStatus').textContent = 'Generazione documenti...';
+        
+        // Chiama l'endpoint di esportazione
+        const response = await fetch(`${API_BASE}/courses/${currentExportCourseId}/export-batch?${params}`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore durante l\'esportazione');
+        }
+        
+        // Aggiorna progress
+        document.getElementById('exportProgressBar').style.width = '80%';
+        document.getElementById('exportStatus').textContent = 'Download in corso...';
+        
+        // Scarica il file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Determina il nome del file
+        const extension = exportAsZip ? 'zip' : exportFormat;
+        const sanitizedName = currentExportCourseName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.download = `${sanitizedName}_export.${extension}`;
+        
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        // Completa progress
+        document.getElementById('exportProgressBar').style.width = '100%';
+        document.getElementById('exportStatus').textContent = 'Esportazione completata!';
+        
+        showToast('Esportazione completata con successo', 'success');
+        
+        // Chiudi la modale dopo 1 secondo
+        setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
+            if (modal) {
+                modal.hide();
+            }
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+        document.getElementById('exportProgress').style.display = 'none';
+        document.getElementById('startExportBtn').disabled = false;
+    }
+}
+
+let currentAIAnalysisCourseId = null;
+let currentAIAnalysisCourseName = null;
+let currentAIAnalysisType = null;
+let currentAIAnalysisResult = null;
+
+function showAIAnalysisModal(courseId, courseName) {
+    currentAIAnalysisCourseId = courseId;
+    currentAIAnalysisCourseName = courseName;
+    
+    document.getElementById('aiAnalysisCourseName').textContent = courseName;
+    document.getElementById('aiAnalysisProgress').style.display = 'none';
+    document.getElementById('aiAnalysisResults').style.display = 'none';
+    document.getElementById('aiAnalysisResultsContent').innerHTML = '';
+    
+    // Reset tab alla prima tab
+    const firstTab = document.getElementById('new-analysis-tab');
+    const firstPane = document.getElementById('new-analysis-pane');
+    const savedTab = document.getElementById('saved-analyses-tab');
+    const savedPane = document.getElementById('saved-analyses-pane');
+    
+    firstTab.classList.add('active');
+    firstPane.classList.add('active', 'show');
+    savedTab.classList.remove('active');
+    savedPane.classList.remove('active', 'show');
+    
+    const modal = new bootstrap.Modal(document.getElementById('aiAnalysisModal'));
+    modal.show();
+}
+
+async function loadSavedAnalyses() {
+    if (!currentAIAnalysisCourseId) {
+        return;
+    }
+    
+    const container = document.getElementById('savedAnalysesList');
+    container.innerHTML = '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Caricamento analisi salvate...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentAIAnalysisCourseId}/ai-analyses`);
+        
+        if (!response.ok) {
+            throw new Error('Errore nel caricamento delle analisi');
+        }
+        
+        const analyses = await response.json();
+        
+        if (analyses.length === 0) {
+            container.innerHTML = '<div class="alert alert-info">Nessuna analisi salvata per questo corso.</div>';
+            return;
+        }
+        
+        const analysisTypeNames = {
+            'balance': 'Bilanciamento Teoria/Pratica',
+            'suggestions': 'Suggerimenti Miglioramento',
+            'duplicates': 'Contenuti Duplicati',
+            'coherence': 'Coerenza Obiettivi'
+        };
+        
+        const analysisTypeIcons = {
+            'balance': 'bi-balance',
+            'suggestions': 'bi-lightbulb',
+            'duplicates': 'bi-files',
+            'coherence': 'bi-check-circle'
+        };
+        
+        let html = '<div class="list-group">';
+        analyses.forEach(analysis => {
+            const typeName = analysisTypeNames[analysis.analysis_type] || analysis.analysis_type;
+            const typeIcon = analysisTypeIcons[analysis.analysis_type] || 'bi-file-text';
+            
+            html += `
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">
+                                <i class="bi ${typeIcon}"></i> ${analysis.title}
+                            </h6>
+                            <p class="mb-1 text-muted small">${typeName}</p>
+                            <small class="text-muted">${analysis.created_at_formatted}</small>
+                        </div>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="viewSavedAnalysis(${analysis.id})" title="Visualizza">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="downloadSavedAnalysis(${analysis.id}, 'pdf')" title="Scarica PDF">
+                                <i class="bi bi-file-pdf"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-info" onclick="downloadSavedAnalysis(${analysis.id}, 'docx')" title="Scarica DOCX">
+                                <i class="bi bi-file-word"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        container.innerHTML = `<div class="alert alert-danger">Errore nel caricamento: ${error.message}</div>`;
+    }
+}
+
+async function viewSavedAnalysis(analysisId) {
+    if (!currentAIAnalysisCourseId) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/courses/${currentAIAnalysisCourseId}/ai-analyses/${analysisId}`);
+        
+        if (!response.ok) {
+            throw new Error('Errore nel caricamento dell\'analisi');
+        }
+        
+        const analysis = await response.json();
+        
+        // Salva per l'esportazione
+        currentAIAnalysisType = analysis.analysis_type;
+        currentAIAnalysisResult = {
+            analysis: analysis.analysis,
+            title: analysis.title,
+            data: analysis.data
+        };
+        
+        // Mostra nella sezione risultati
+        displayAIAnalysisResults(analysis.analysis_type, analysis);
+        
+        // Passa alla tab nuova analisi per vedere i risultati
+        const firstTab = document.getElementById('new-analysis-tab');
+        const firstPane = document.getElementById('new-analysis-pane');
+        firstTab.click();
+        
+        // Scroll ai risultati
+        setTimeout(() => {
+            const resultsDiv = document.getElementById('aiAnalysisResults');
+            if (resultsDiv) {
+                resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 100);
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+    }
+}
+
+function downloadSavedAnalysis(analysisId, format) {
+    if (!currentAIAnalysisCourseId) {
+        return;
+    }
+    
+    // Crea un link di download diretto
+    const url = `${API_BASE}/courses/${currentAIAnalysisCourseId}/ai-analyses/${analysisId}/export/${format}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    showToast(`Download ${format.toUpperCase()} avviato`, 'success');
+}
+
+async function runAIAnalysis(analysisType) {
+    if (!currentAIAnalysisCourseId) {
+        showToast('Nessun corso selezionato', 'error');
+        return;
+    }
+    
+    // Mostra progress bar
+    document.getElementById('aiAnalysisProgress').style.display = 'block';
+    document.getElementById('aiAnalysisResults').style.display = 'none';
+    document.getElementById('aiAnalysisProgressBar').style.width = '0%';
+    document.getElementById('aiAnalysisStatus').textContent = 'Preparazione analisi...';
+    
+    const analysisNames = {
+        'balance': 'Bilanciamento Teoria/Pratica',
+        'suggestions': 'Suggerimenti Miglioramento',
+        'duplicates': 'Contenuti Duplicati',
+        'coherence': 'Coerenza Obiettivi'
+    };
+    
+    try {
+        // Aggiorna progress
+        document.getElementById('aiAnalysisProgressBar').style.width = '30%';
+        document.getElementById('aiAnalysisStatus').textContent = `Esecuzione analisi: ${analysisNames[analysisType]}...`;
+        
+        // Chiama l'endpoint di analisi
+        const response = await fetch(`${API_BASE}/courses/${currentAIAnalysisCourseId}/ai-analysis/${analysisType}`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore durante l\'analisi');
+        }
+        
+        // Aggiorna progress
+        document.getElementById('aiAnalysisProgressBar').style.width = '80%';
+        document.getElementById('aiAnalysisStatus').textContent = 'Elaborazione risultati...';
+        
+        const result = await response.json();
+        
+        // Completa progress
+        document.getElementById('aiAnalysisProgressBar').style.width = '100%';
+        document.getElementById('aiAnalysisStatus').textContent = 'Analisi completata!';
+        
+        // Salva i risultati per l'esportazione
+        currentAIAnalysisType = analysisType;
+        currentAIAnalysisResult = result;
+        
+        // Mostra risultati
+        displayAIAnalysisResults(analysisType, result);
+        
+        showToast('Analisi completata con successo', 'success');
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
+        document.getElementById('aiAnalysisProgress').style.display = 'none';
+    }
+}
+
+function displayAIAnalysisResults(analysisType, result) {
+    const resultsDiv = document.getElementById('aiAnalysisResults');
+    const contentDiv = document.getElementById('aiAnalysisResultsContent');
+    
+    let html = `<h6 class="mb-3">${result.title || 'Risultati Analisi'}</h6>`;
+    
+    if (result.analysis) {
+        // Converti Markdown in HTML se presente
+        if (typeof result.analysis === 'string') {
+            // Usa la funzione di conversione Markdown esistente
+            html += `<div class="markdown-preview">${convertMarkdownToHTML(result.analysis)}</div>`;
+        } else {
+            html += `<pre class="bg-white p-3 rounded">${JSON.stringify(result.analysis, null, 2)}</pre>`;
+        }
+    } else if (result.summary) {
+        html += `<div class="markdown-preview">${convertMarkdownToHTML(result.summary)}</div>`;
+    } else {
+        html += `<p class="text-muted">Nessun risultato disponibile.</p>`;
+    }
+    
+    if (result.recommendations && result.recommendations.length > 0) {
+        html += `<hr><h6 class="mb-2">Raccomandazioni:</h6><ul class="list-group">`;
+        result.recommendations.forEach(rec => {
+            html += `<li class="list-group-item">${rec}</li>`;
+        });
+        html += `</ul>`;
+    }
+    
+    contentDiv.innerHTML = html;
+    resultsDiv.style.display = 'block';
+    
+    // Scroll ai risultati
+    resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function exportAIAnalysis(format) {
+    if (!currentAIAnalysisCourseId || !currentAIAnalysisResult) {
+        showToast('Nessun risultato di analisi disponibile per l\'esportazione', 'warning');
+        return;
+    }
+    
+    try {
+        const analysisNames = {
+            'balance': 'Bilanciamento_Teoria_Pratica',
+            'suggestions': 'Suggerimenti_Miglioramento',
+            'duplicates': 'Contenuti_Duplicati',
+            'coherence': 'Coerenza_Obiettivi'
+        };
+        
+        const analysisName = analysisNames[currentAIAnalysisType] || 'Analisi';
+        const sanitizedCourseName = currentAIAnalysisCourseName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        
+        // Chiama l'endpoint di esportazione
+        const response = await fetch(`${API_BASE}/courses/${currentAIAnalysisCourseId}/ai-analysis/${currentAIAnalysisType}/export/${format}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                analysis: currentAIAnalysisResult.analysis,
+                title: currentAIAnalysisResult.title,
+                data: currentAIAnalysisResult.data
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore durante l\'esportazione');
+        }
+        
+        // Scarica il file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${sanitizedCourseName}_${analysisName}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast(`Analisi esportata in ${format.toUpperCase()} con successo`, 'success');
+        
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
     }
 }
 
