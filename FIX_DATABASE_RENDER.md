@@ -116,13 +116,14 @@ A volte un semplice riavvio risolve:
 2. Verifica che funzioni con `/api/db-status`
 3. Prova a creare un corso
 
-### Errore: "database is locked"
+### Errore: "database is locked" o SQLAlchemy error gkpj
 
 **Causa**: SQLite non supporta accessi concorrenti multipli (problema con Gunicorn workers)
 
 **Soluzione**: 
-- Il Dockerfile usa già `--workers 2` che può causare problemi con SQLite
-- Per produzione, considera di passare a PostgreSQL (Render offre database PostgreSQL gratuito)
+- ✅ **RISOLTO**: Il Dockerfile ora usa `--workers 1` per evitare conflitti con SQLite
+- Se vedi ancora questo errore dopo il nuovo deploy, verifica che il deploy sia completato
+- Per produzione con alto traffico, considera di passare a PostgreSQL (Render offre database PostgreSQL gratuito)
 
 ### Errore: "Permission denied" o "Read-only file system"
 

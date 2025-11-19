@@ -45,7 +45,7 @@ set -e\n\
 PORT=${PORT:-5000}\n\
 echo "🚀 Avvio Gunicorn sulla porta $PORT..."\n\
 echo "💡 Il database verrà inizializzato automaticamente al primo accesso"\n\
-exec gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile - app:app\n\
+exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --access-logfile - --error-logfile - app:app\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Usa lo script di avvio invece di Gunicorn direttamente
