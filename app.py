@@ -3509,6 +3509,191 @@ def create_canva_presentation(course_id):
             'traceback': traceback.format_exc()
         }), 500
 
+@app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/export-pdf-from-content', methods=['POST'])
+def export_pdf_from_content(course_id, lesson_id):
+    """Genera PDF dal contenuto Markdown completo (come nell'anteprima)"""
+    lesson = Lesson.query.filter_by(id=lesson_id, course_id=course_id).first_or_404()
+    course = Course.query.get_or_404(course_id)
+    
+    try:
+        data = request.json
+        full_content = data.get('content', '')
+        lesson_title = data.get('title', lesson.title)
+        
+        if not full_content:
+            return jsonify({'error': 'Contenuto mancante'}), 400
+        
+        # Recupera preferenze esportazione
+        export_author = get_preference_value('exportAuthor', '')
+        export_company = get_preference_value('exportCompany', '')
+        
+        # Genera PDF usando WeasyPrint
+        from weasyprint import HTML
+        
+        # Converti Markdown a HTML usando la stessa logica dell'anteprima
+        # Usa la funzione convertMarkdownToHTML personalizzata (replicata in Python)
+        html_content = markdown.markdown(full_content, extensions=['extra', 'codehilite', 'nl2br'])
+        
+        # Crea HTML completo con gli stili allineati all'anteprima
+        html_doc = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>{lesson_title}</title>
+            {f'<meta name="author" content="{export_author}">' if export_author else ''}
+            {f'<meta name="creator" content="{export_company}">' if export_company else ''}
+            {f'<meta name="subject" content="{export_company}">' if export_company else ''}
+            <style>
+                @page {{
+                    size: A4;
+                    margin: 2cm;
+                }}
+                body {{
+                    font-family: 'DejaVu Sans', Arial, sans-serif;
+                    font-size: 11pt;
+                    line-height: 1.8;
+                    color: #2c3e50;
+                }}
+                h1 {{
+                    font-size: 2.25em;
+                    font-weight: 700;
+                    color: #1a1a1a;
+                    border-bottom: 3px solid #667eea;
+                    padding-bottom: 0.5em;
+                    margin: 0 0 1.5em 0;
+                    line-height: 1.2;
+                }}
+                h2 {{
+                    font-size: 1.75em;
+                    font-weight: 600;
+                    color: #2c3e50;
+                    border-bottom: 2px solid #e0e0e0;
+                    padding-bottom: 0.4em;
+                    margin: 2.5em 0 1em 0;
+                    line-height: 1.3;
+                }}
+                h3 {{
+                    font-size: 1.4em;
+                    font-weight: 600;
+                    color: #3d4a5c;
+                    margin: 2em 0 0.8em 0;
+                    line-height: 1.4;
+                }}
+                h4 {{
+                    font-size: 1.2em;
+                    font-weight: 600;
+                    color: #4a5568;
+                    margin: 1.5em 0 0.6em 0;
+                    line-height: 1.4;
+                }}
+                p {{
+                    font-size: 1.05em;
+                    line-height: 1.8;
+                    color: #2d3748;
+                    margin: 0 0 1.25em 0;
+                    text-align: left;
+                }}
+                ul, ol {{
+                    margin: 1em 0 1.5em 0;
+                    padding-left: 2.5em;
+                    line-height: 1.8;
+                }}
+                li {{
+                    font-size: 1.05em;
+                    line-height: 1.8;
+                    color: #2d3748;
+                    margin-bottom: 0.75em;
+                }}
+                strong {{
+                    font-weight: 700;
+                    color: #1a1a1a;
+                }}
+                em {{
+                    font-style: italic;
+                    color: #4a5568;
+                }}
+                code {{
+                    background-color: #f7f7f7;
+                    border: 1px solid #e1e4e8;
+                    border-radius: 4px;
+                    padding: 3px 8px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 0.9em;
+                    color: #d73a49;
+                }}
+                pre {{
+                    background-color: #f6f8fa;
+                    border: 1px solid #e1e4e8;
+                    border-radius: 8px;
+                    padding: 1.25rem;
+                    overflow-x: auto;
+                    margin-bottom: 1.5em;
+                }}
+                pre code {{
+                    background-color: transparent;
+                    border: none;
+                    padding: 0;
+                    color: #24292e;
+                }}
+                blockquote {{
+                    border-left: 4px solid #667eea;
+                    padding: 0.75rem 1.25rem;
+                    margin: 1.5em 0;
+                    background-color: #f8f9fa;
+                    border-radius: 0 4px 4px 0;
+                    color: #4a5568;
+                    font-style: italic;
+                }}
+                .metadata {{
+                    background-color: #ecf0f1;
+                    padding: 15px;
+                    border-radius: 5px;
+                    margin-bottom: 20px;
+                }}
+                .metadata p {{
+                    margin: 5px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="metadata">
+                <h1>{lesson_title}</h1>
+                <p><strong>Corso:</strong> {course.name} ({course.code})</p>
+                <p><strong>Tipo:</strong> {'Teorica' if lesson.lesson_type == 'theory' else 'Pratica'}</p>
+                <p><strong>Durata:</strong> {lesson.duration_hours} ore</p>
+            </div>
+            
+            <div class="lesson-content">
+                {html_content if html_content and html_content.strip() else '<p>Nessun contenuto disponibile.</p>'}
+            </div>
+            
+            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 9pt; color: #7f8c8d; text-align: center;">
+                <p>Generato il {datetime.now().strftime('%d/%m/%Y alle %H:%M')}</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Genera PDF
+        pdf_bytes = HTML(string=html_doc).write_pdf()
+        
+        # Traccia l'esportazione
+        course.export_count = (course.export_count or 0) + 1
+        db.session.commit()
+        
+        return send_file(
+            BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f"{course.code}_{lesson.order}_{lesson_title[:30].replace(' ', '_')}.pdf"
+        )
+    
+    except Exception as e:
+        import traceback
+        logging.error(f'Errore durante l\'esportazione PDF: {e}\n{traceback.format_exc()}')
+        return jsonify({'error': f'Errore durante l\'esportazione: {str(e)}'}), 500
+
 @app.route('/api/courses/<int:course_id>/lessons/<int:lesson_id>/export/<format_type>', methods=['GET'])
 def export_lesson(course_id, lesson_id, format_type):
     """Esporta una lezione in PDF o DOCX"""
@@ -3519,20 +3704,62 @@ def export_lesson(course_id, lesson_id, format_type):
         return jsonify({'error': 'Formato non supportato. Usa "pdf" o "docx"'}), 400
     
     try:
-        # Prepara il contenuto
-        content = lesson.content or 'Nessun contenuto disponibile'
+        # Prepara il contenuto come nell'anteprima: prima Markdown, poi sezioni separate
+        import re
         
         # Rimuovi il testo "(Generato con ChatGPT)" dalle esportazioni
-        import re
-        # Rimuovi il separatore e la sezione ChatGPT
-        content = re.sub(r'\n\n---\n\n## Contenuto Dettagliato \(Generato con ChatGPT\)\n\n', '\n\n', content)
-        # Rimuovi anche varianti possibili
-        content = re.sub(r'\n\n---\n\n## Contenuto Dettagliato \(Generato con ChatGPT\)', '', content)
-        content = re.sub(r'## Contenuto Dettagliato \(Generato con ChatGPT\)\n\n', '', content)
+        content = lesson.content or ''
+        if content:
+            content = re.sub(r'\n\n---\n\n## Contenuto Dettagliato \(Generato con ChatGPT\)\n\n', '\n\n', content)
+            content = re.sub(r'\n\n---\n\n## Contenuto Dettagliato \(Generato con ChatGPT\)', '', content)
+            content = re.sub(r'## Contenuto Dettagliato \(Generato con ChatGPT\)\n\n', '', content)
+            content = content.strip()
         
         objectives = json.loads(lesson.objectives) if lesson.objectives else []
         materials = json.loads(lesson.materials) if lesson.materials else []
         exercises = json.loads(lesson.exercises) if lesson.exercises else []
+        
+        # Costruisci il contenuto completo come nell'anteprima
+        full_content = ''
+        
+        # Se c'è contenuto Markdown, aggiungilo
+        if content and content.strip() != '':
+            full_content = content.strip()
+            if not full_content.endswith('\n'):
+                full_content += '\n'
+            full_content += '\n'
+        else:
+            # Se non c'è contenuto, aggiungi solo la sezione Contenuti
+            full_content = '## Contenuti\n\n'
+            full_content += '*Nessun contenuto disponibile.*\n\n'
+        
+        # Aggiungi SEMPRE le sezioni Obiettivi, Materiali ed Esercizi dopo il contenuto Markdown
+        # Sezione Obiettivi
+        full_content += '## Obiettivi\n\n'
+        if objectives and len(objectives) > 0:
+            for obj in objectives:
+                full_content += f'- {obj}\n'
+        else:
+            full_content += '*Nessun obiettivo specificato.*\n'
+        full_content += '\n'
+        
+        # Sezione Materiali
+        full_content += '## Materiali\n\n'
+        if materials and len(materials) > 0:
+            for mat in materials:
+                full_content += f'- {mat}\n'
+        else:
+            full_content += '*Nessun materiale specificato.*\n'
+        full_content += '\n'
+        
+        # Sezione Esercizi
+        full_content += '## Esercizi\n\n'
+        if exercises and len(exercises) > 0:
+            for ex in exercises:
+                full_content += f'- {ex}\n'
+        else:
+            full_content += '*Nessun esercizio specificato.*\n'
+        full_content += '\n'
         
         # Recupera preferenze esportazione
         export_author = get_preference_value('exportAuthor', '')
@@ -3542,8 +3769,38 @@ def export_lesson(course_id, lesson_id, format_type):
             # Genera PDF usando WeasyPrint
             from weasyprint import HTML
             
-            # Converti Markdown a HTML
-            html_content = markdown.markdown(content, extensions=['extra', 'codehilite'])
+            # Converti Markdown a HTML (usa il contenuto completo costruito come nell'anteprima)
+            # Debug: verifica il contenuto
+            logging.info(f'Contenuto da convertire (lunghezza: {len(full_content)} caratteri)')
+            logging.info(f'Primi 500 caratteri: {full_content[:500]}')
+            
+            # Assicurati che il contenuto non sia vuoto
+            if not full_content or not full_content.strip():
+                logging.warning('Contenuto vuoto, uso contenuto di default')
+                full_content = '## Contenuti\n\n*Nessun contenuto disponibile.*\n\n'
+            
+            try:
+                # Converti Markdown a HTML
+                html_content = markdown.markdown(full_content, extensions=['extra', 'codehilite', 'nl2br'])
+                logging.info(f'Conversione Markdown completata. HTML generato (lunghezza: {len(html_content)} caratteri)')
+                logging.info(f'Primi 500 caratteri HTML: {html_content[:500]}')
+                
+                # Verifica che la conversione abbia prodotto HTML valido
+                if not html_content or html_content.strip() == '':
+                    logging.warning('Conversione Markdown ha prodotto HTML vuoto, uso fallback')
+                    html_content = markdown.markdown(full_content, extensions=['extra'])
+                    
+            except Exception as e:
+                # Fallback: se la conversione fallisce, usa una conversione base
+                logging.error(f'Errore conversione Markdown: {e}', exc_info=True)
+                try:
+                    html_content = markdown.markdown(full_content, extensions=['extra'])
+                    logging.info('Conversione Markdown con fallback completata')
+                except Exception as e2:
+                    # Ultimo fallback: escape HTML e mostra come preformattato
+                    logging.error(f'Errore anche nel fallback: {e2}', exc_info=True)
+                    import html as html_escape
+                    html_content = f'<pre>{html_escape.escape(full_content)}</pre>'
             
             # Crea HTML completo
             html_doc = f"""
@@ -3567,36 +3824,62 @@ def export_lesson(course_id, lesson_id, format_type):
                         color: #333;
                     }}
                     h1 {{
-                        font-size: 24pt;
-                        color: #2c3e50;
-                        border-bottom: 3px solid #3498db;
-                        padding-bottom: 10px;
-                        margin-bottom: 20px;
+                        font-size: 2.25em;
+                        font-weight: 700;
+                        color: #1a1a1a;
+                        border-bottom: 3px solid #667eea;
+                        padding-bottom: 0.5em;
+                        margin: 0 0 1.5em 0;
+                        line-height: 1.2;
                     }}
                     h2 {{
-                        font-size: 18pt;
-                        color: #34495e;
-                        border-bottom: 2px solid #ecf0f1;
-                        padding-bottom: 8px;
-                        margin-top: 25px;
-                        margin-bottom: 15px;
+                        font-size: 1.75em;
+                        font-weight: 600;
+                        color: #2c3e50;
+                        border-bottom: 2px solid #e0e0e0;
+                        padding-bottom: 0.4em;
+                        margin: 2.5em 0 1em 0;
+                        line-height: 1.3;
                     }}
                     h3 {{
-                        font-size: 14pt;
-                        color: #7f8c8d;
-                        margin-top: 20px;
-                        margin-bottom: 10px;
+                        font-size: 1.4em;
+                        font-weight: 600;
+                        color: #3d4a5c;
+                        margin: 2em 0 0.8em 0;
+                        line-height: 1.4;
+                    }}
+                    h4 {{
+                        font-size: 1.2em;
+                        font-weight: 600;
+                        color: #4a5568;
+                        margin: 1.5em 0 0.6em 0;
+                        line-height: 1.4;
                     }}
                     p {{
-                        margin-bottom: 12px;
-                        text-align: justify;
+                        font-size: 1.05em;
+                        line-height: 1.8;
+                        color: #2d3748;
+                        margin: 0 0 1.25em 0;
+                        text-align: left;
                     }}
                     ul, ol {{
-                        margin-bottom: 12px;
-                        padding-left: 30px;
+                        margin: 1em 0 1.5em 0;
+                        padding-left: 2.5em;
+                        line-height: 1.8;
                     }}
                     li {{
-                        margin-bottom: 6px;
+                        font-size: 1.05em;
+                        line-height: 1.8;
+                        color: #2d3748;
+                        margin-bottom: 0.75em;
+                    }}
+                    strong {{
+                        font-weight: 700;
+                        color: #1a1a1a;
+                    }}
+                    em {{
+                        font-style: italic;
+                        color: #4a5568;
                     }}
                     code {{
                         background-color: #f4f4f4;
@@ -3653,20 +3936,9 @@ def export_lesson(course_id, lesson_id, format_type):
                     <p><strong>Durata:</strong> {lesson.duration_hours} ore</p>
                 </div>
                 
-                <h2>Descrizione</h2>
-                <p>{lesson.description or 'Nessuna descrizione disponibile.'}</p>
-                
-                <h2>Contenuti</h2>
-                {html_content if html_content.strip() else '<p>Nessun contenuto disponibile.</p>'}
-                
-                <h2>Obiettivi</h2>
-                {f'<ul>' + ''.join([f'<li>{obj}</li>' for obj in objectives]) + '</ul>' if objectives else '<p><em>Nessun obiettivo specificato.</em></p>'}
-                
-                <h2>Materiali</h2>
-                {f'<ul>' + ''.join([f'<li>{mat}</li>' for mat in materials]) + '</ul>' if materials else '<p><em>Nessun materiale specificato.</em></p>'}
-                
-                <h2>Esercizi</h2>
-                {f'<ul>' + ''.join([f'<li>{ex}</li>' for ex in exercises]) + '</ul>' if exercises else '<p><em>Nessun esercizio specificato.</em></p>'}
+                <div class="lesson-content">
+                    {html_content if html_content and html_content.strip() else '<p>Nessun contenuto disponibile.</p>'}
+                </div>
                 
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 9pt; color: #7f8c8d; text-align: center;">
                     <p>Generato il {datetime.now().strftime('%d/%m/%Y alle %H:%M')}</p>

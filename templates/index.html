@@ -470,9 +470,14 @@
                                 <div class="mb-3">
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <label class="form-label mb-0">Contenuti (Markdown)</label>
-                                        <button type="button" class="btn btn-sm btn-outline-success" onclick="optimizeContent()" id="optimizeContentBtn" title="Ottimizza contenuti esistenti con AI">
-                                            <i class="bi bi-stars"></i> Ottimizza con AI
-                                        </button>
+                                        <div class="btn-group" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="formatMarkdownContent()" id="formatMarkdownBtn" title="Formatta il Markdown applicando le regole dell'anteprima">
+                                                <i class="bi bi-code-square"></i> Formatta
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-success" onclick="optimizeContent()" id="optimizeContentBtn" title="Ottimizza contenuti esistenti con AI">
+                                                <i class="bi bi-stars"></i> Ottimizza con AI
+                                            </button>
+                                        </div>
                                     </div>
                                     <textarea class="form-control" id="lessonContent" rows="10"></textarea>
                                 </div>
@@ -531,6 +536,9 @@
                     <div id="lessonPreviewContent" class="markdown-preview"></div>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" id="savePdfFromPreviewBtn" onclick="savePdfFromPreview()">
+                        <i class="bi bi-file-pdf"></i> Salva PDF
+                    </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
                 </div>
             </div>

@@ -2513,6 +2513,119 @@ async function generateExercises() {
     }
 }
 
+function formatMarkdownContent() {
+    const contentTextarea = document.getElementById('lessonContent');
+    if (!contentTextarea) return;
+    
+    let content = contentTextarea.value;
+    if (!content || !content.trim()) {
+        showToast('Nessun contenuto da formattare', 'warning');
+        return;
+    }
+    
+    // Converti il Markdown in testo semplice rimuovendo tutti i tag
+    const lines = content.split('\n');
+    let formattedLines = [];
+    let previousWasEmpty = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        const trimmed = line.trim();
+        
+        // Linea vuota: mantieni solo se necessario
+        if (trimmed === '') {
+            if (!previousWasEmpty && formattedLines.length > 0) {
+                formattedLines.push('');
+                previousWasEmpty = true;
+            }
+            continue;
+        }
+        
+        previousWasEmpty = false;
+        let cleanLine = trimmed;
+        
+        // Rimuovi i tag dei titoli (#, ##, ###, ####)
+        if (trimmed.startsWith('#### ')) {
+            cleanLine = trimmed.substring(5).trim();
+        } else if (trimmed.startsWith('### ') && !trimmed.startsWith('#### ')) {
+            cleanLine = trimmed.substring(4).trim();
+        } else if (trimmed.startsWith('## ') && !trimmed.startsWith('### ')) {
+            cleanLine = trimmed.substring(3).trim();
+        } else if (trimmed.startsWith('# ') && !trimmed.startsWith('## ')) {
+            cleanLine = trimmed.substring(2).trim();
+        }
+        // Rimuovi i marker delle liste (- o *)
+        else if (trimmed.match(/^[\-\*]\s+(.+)$/)) {
+            cleanLine = trimmed.replace(/^[\-\*]\s+/, '').trim();
+        }
+        // Rimuovi separatori (---, ***, ___)
+        else if (trimmed.match(/^[\-\*_]{3,}$/)) {
+            // Salta questa linea (separatore)
+            continue;
+        }
+        
+        // Rimuovi i tag di formattazione Markdown
+        // Rimuovi **testo** (grassetto) e lascia solo testo
+        cleanLine = cleanLine.replace(/\*\*(.+?)\*\*/g, '$1');
+        // Rimuovi *testo* (corsivo) e lascia solo testo
+        cleanLine = cleanLine.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '$1');
+        // Rimuovi `testo` (codice inline)
+        cleanLine = cleanLine.replace(/`(.+?)`/g, '$1');
+        // Rimuovi [testo](url) (link) e lascia solo testo
+        cleanLine = cleanLine.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+        // Rimuovi ![alt](url) (immagini)
+        cleanLine = cleanLine.replace(/!\[([^\]]*)\]\([^\)]+\)/g, '');
+        // Rimuovi ~~testo~~ (barrato)
+        cleanLine = cleanLine.replace(/~~(.+?)~~/g, '$1');
+        
+        // Normalizza spazi multipli
+        cleanLine = cleanLine.replace(/[ \t]+/g, ' ').trim();
+        
+        // Aggiungi la linea pulita se non è vuota
+        if (cleanLine) {
+            formattedLines.push(cleanLine);
+        }
+    }
+    
+    // Rimuovi linee vuote multiple alla fine
+    while (formattedLines.length > 0 && formattedLines[formattedLines.length - 1] === '') {
+        formattedLines.pop();
+    }
+    
+    // Rimuovi linee vuote multiple consecutive (mantieni massimo 2)
+    let finalLines = [];
+    let emptyCount = 0;
+    for (let i = 0; i < formattedLines.length; i++) {
+        if (formattedLines[i] === '') {
+            emptyCount++;
+            if (emptyCount <= 2) {
+                finalLines.push('');
+            }
+        } else {
+            emptyCount = 0;
+            finalLines.push(formattedLines[i]);
+        }
+    }
+    
+    // Rimuovi linee vuote alla fine
+    while (finalLines.length > 0 && finalLines[finalLines.length - 1] === '') {
+        finalLines.pop();
+    }
+    
+    // Aggiungi una nuova riga finale se c'è contenuto
+    if (finalLines.length > 0) {
+        finalLines.push('');
+    }
+    
+    // Unisci le linee formattate
+    const formattedContent = finalLines.join('\n');
+    
+    // Aggiorna il textarea
+    contentTextarea.value = formattedContent;
+    
+    showToast('Markdown convertito in testo semplice', 'success');
+}
+
 async function optimizeContent() {
     if (!currentCourseId) {
         alert('Nessun corso selezionato');
@@ -2575,6 +2688,131 @@ async function optimizeContent() {
     }
 }
 
+// Funzione per convertire Markdown in HTML con formattazione personalizzata
+function convertMarkdownToHTML(markdown) {
+    if (!markdown) return '';
+    
+    const lines = markdown.split('\n');
+    let result = [];
+    let currentList = [];
+    let currentParagraph = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        const trimmed = line.trim();
+        
+        // Linea vuota: chiudi paragrafo o lista corrente
+        if (trimmed === '') {
+            if (currentList.length > 0) {
+                result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+                currentList = [];
+            }
+            if (currentParagraph.length > 0) {
+                result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+                currentParagraph = [];
+            }
+            continue;
+        }
+        
+        // Titoli (#, ##, ###, ####)
+        if (trimmed.startsWith('#### ')) {
+            if (currentList.length > 0) {
+                result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+                currentList = [];
+            }
+            if (currentParagraph.length > 0) {
+                result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+                currentParagraph = [];
+            }
+            let title = trimmed.substring(5).trim();
+            // Converti **testo** in <strong>testo</strong> nel titolo
+            title = title.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            result.push('<h4 class="md-subsection">' + title + '</h4>');
+        } else if (trimmed.startsWith('### ')) {
+            if (currentList.length > 0) {
+                result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+                currentList = [];
+            }
+            if (currentParagraph.length > 0) {
+                result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+                currentParagraph = [];
+            }
+            let title = trimmed.substring(4).trim();
+            title = title.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            result.push('<h3 class="md-section">' + title + '</h3>');
+        } else if (trimmed.startsWith('## ') && !trimmed.startsWith('### ')) {
+            if (currentList.length > 0) {
+                result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+                currentList = [];
+            }
+            if (currentParagraph.length > 0) {
+                result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+                currentParagraph = [];
+            }
+            let title = trimmed.substring(3).trim();
+            // Rimuovi eventuali spazi extra
+            title = title.replace(/\s+/g, ' ').trim();
+            title = title.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            result.push('<h2 class="md-subtitle">' + title + '</h2>');
+        } else if (trimmed.startsWith('# ')) {
+            if (currentList.length > 0) {
+                result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+                currentList = [];
+            }
+            if (currentParagraph.length > 0) {
+                result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+                currentParagraph = [];
+            }
+            let title = trimmed.substring(2).trim();
+            title = title.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            result.push('<h1 class="md-title">' + title + '</h1>');
+        }
+        // Liste puntate (- o *)
+        else if (trimmed.match(/^[\-\*] (.+)$/)) {
+            // Chiudi paragrafo corrente se presente
+            if (currentParagraph.length > 0) {
+                result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+                currentParagraph = [];
+            }
+            
+            let listItem = trimmed.replace(/^[\-\*] (.+)$/, '$1');
+            // Converti **testo** e *testo* nel list item
+            listItem = listItem.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            listItem = listItem.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+            currentList.push('<li class="md-list-item">' + listItem + '</li>');
+        }
+        // Paragrafo normale
+        else {
+            // Chiudi lista corrente se presente
+            if (currentList.length > 0) {
+                result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+                currentList = [];
+            }
+            
+            // Converti **testo** e *testo* nel paragrafo
+            let paraLine = trimmed;
+            paraLine = paraLine.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            paraLine = paraLine.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+            currentParagraph.push(paraLine);
+        }
+    }
+    
+    // Chiudi liste e paragrafi rimanenti
+    if (currentList.length > 0) {
+        result.push('<ul class="md-list">' + currentList.join('') + '</ul>');
+    }
+    if (currentParagraph.length > 0) {
+        result.push('<p class="md-paragraph">' + currentParagraph.join(' ') + '</p>');
+    }
+    
+    return result.join('\n');
+}
+
+// Variabile globale per salvare il contenuto Markdown completo dell'anteprima
+let currentPreviewContent = '';
+let currentPreviewLessonId = null;
+let currentPreviewLessonTitle = '';
+
 async function showLessonPreview(lessonId) {
     try {
         const response = await fetch(`${API_BASE}/courses/${currentCourseId}`);
@@ -2586,6 +2824,10 @@ async function showLessonPreview(lessonId) {
             return;
         }
         
+        // Salva informazioni per l'export
+        currentPreviewLessonId = lessonId;
+        currentPreviewLessonTitle = lesson.title;
+        
         // Imposta il titolo del modal
         document.getElementById('lessonPreviewTitle').textContent = `Anteprima: ${lesson.title}`;
         
@@ -2594,18 +2836,27 @@ async function showLessonPreview(lessonId) {
         const materials = lesson.materials ? (Array.isArray(lesson.materials) ? lesson.materials : JSON.parse(lesson.materials)) : [];
         const exercises = lesson.exercises ? (Array.isArray(lesson.exercises) ? lesson.exercises : JSON.parse(lesson.exercises)) : [];
         
-        // Costruisci il contenuto completo
+        // Costruisci il contenuto: prima il Markdown, poi le sezioni separate
         let fullContent = '';
         
-        // Descrizione
-        fullContent += '## Descrizione\n\n';
-        fullContent += (lesson.description || 'Nessuna descrizione disponibile.') + '\n\n';
+        // Se c'è contenuto Markdown, aggiungilo
+        if (lesson.content && lesson.content.trim() !== '') {
+            fullContent = lesson.content.trim();
+            // Assicurati che termini con una nuova riga
+            if (!fullContent.endsWith('\n')) {
+                fullContent += '\n';
+            }
+            fullContent += '\n';
+        } else {
+            // Se non c'è contenuto, aggiungi solo la sezione Contenuti
+            fullContent = '## Contenuti\n\n';
+            fullContent += '*Nessun contenuto disponibile.*\n\n';
+        }
         
-        // Contenuti
-        fullContent += '## Contenuti\n\n';
-        fullContent += (lesson.content || '*Nessun contenuto disponibile.*') + '\n\n';
+        // Aggiungi SEMPRE le sezioni Obiettivi, Materiali ed Esercizi dopo il contenuto Markdown
+        // Queste sono sezioni separate che vengono sempre mostrate
         
-        // Obiettivi
+        // Sezione Obiettivi
         fullContent += '## Obiettivi\n\n';
         if (objectives && objectives.length > 0) {
             objectives.forEach(obj => {
@@ -2616,7 +2867,7 @@ async function showLessonPreview(lessonId) {
         }
         fullContent += '\n';
         
-        // Materiali
+        // Sezione Materiali
         fullContent += '## Materiali\n\n';
         if (materials && materials.length > 0) {
             materials.forEach(mat => {
@@ -2627,7 +2878,7 @@ async function showLessonPreview(lessonId) {
         }
         fullContent += '\n';
         
-        // Esercizi
+        // Sezione Esercizi
         fullContent += '## Esercizi\n\n';
         if (exercises && exercises.length > 0) {
             exercises.forEach(ex => {
@@ -2636,9 +2887,13 @@ async function showLessonPreview(lessonId) {
         } else {
             fullContent += '*Nessun esercizio specificato.*\n';
         }
+        fullContent += '\n';
         
-        // Renderizza il contenuto Markdown completo
-        const renderedContent = marked.parse(fullContent);
+        // Salva il contenuto completo per l'export
+        currentPreviewContent = fullContent;
+        
+        // Converti Markdown in HTML con formattazione personalizzata
+        const renderedContent = convertMarkdownToHTML(fullContent);
         
         // Mostra il contenuto renderizzato
         document.getElementById('lessonPreviewContent').innerHTML = renderedContent;
@@ -2649,6 +2904,48 @@ async function showLessonPreview(lessonId) {
     } catch (error) {
         console.error('Errore:', error);
         alert('Errore nel caricamento dell\'anteprima della lezione');
+    }
+}
+
+async function savePdfFromPreview() {
+    if (!currentPreviewContent || !currentPreviewLessonId) {
+        alert('Nessun contenuto disponibile per l\'esportazione');
+        return;
+    }
+    
+    try {
+        // Invia il contenuto Markdown completo al backend per generare il PDF
+        const response = await fetch(`${API_BASE}/courses/${currentCourseId}/lessons/${currentPreviewLessonId}/export-pdf-from-content`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: currentPreviewContent,
+                title: currentPreviewLessonTitle
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Errore durante l\'esportazione');
+        }
+        
+        // Scarica il PDF
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentPreviewLessonTitle.replace(/ /g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showToast('PDF generato con successo', 'success');
+    } catch (error) {
+        console.error('Errore:', error);
+        showToast('Errore: ' + error.message, 'error');
     }
 }
 
