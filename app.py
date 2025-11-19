@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, date, time, timedelta
@@ -6740,6 +6740,11 @@ def get_usage_stats():
         
     except Exception as e:
         return jsonify({'error': f'Errore nel recupero delle statistiche di utilizzo: {str(e)}'}), 500
+
+@app.route('/static/manifest.json')
+def manifest():
+    """Serve il manifest.json per PWA"""
+    return send_from_directory('static', 'manifest.json', mimetype='application/manifest+json')
 
 if __name__ == '__main__':
     # Per sviluppo locale, il database è già inizializzato da init_database()

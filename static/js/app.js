@@ -525,7 +525,7 @@ function displayCourses(courses, returnHtml = false) {
         const gradientClass = `gradient-${(course.id % 10) + 1}`;
         
         return `
-        <div class="col-md-6 col-lg-4 mb-4">
+        <div class="col-12 col-sm-6 col-md-6 col-lg-4 mb-4">
             <div class="card course-card h-100">
                 <div class="card-header course-header ${gradientClass}">
                     <div class="d-flex justify-content-between align-items-start">
@@ -926,11 +926,12 @@ function displayLessons(lessons) {
                     </div>
                 </div>
                 <div class="d-flex gap-1 flex-wrap flex-shrink-0 ms-2">
-                    <button class="btn btn-sm btn-outline-info preview-lesson-btn" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Anteprima">
+                    <!-- Pulsanti desktop (visibili solo su schermi >= md) -->
+                    <button class="btn btn-sm btn-outline-info preview-lesson-btn d-none d-md-inline-flex" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Anteprima">
                         <i class="bi bi-eye"></i>
                     </button>
-                    <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" title="Esporta">
+                    <div class="btn-group d-none d-md-flex" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" title="Esporta" aria-expanded="false">
                             <i class="bi bi-download"></i>
                         </button>
                         <ul class="dropdown-menu">
@@ -938,21 +939,41 @@ function displayLessons(lessons) {
                             <li><a class="dropdown-item export-lesson-btn" href="#" data-lesson-id="${lesson.id}" data-format="docx"><i class="bi bi-file-word"></i> Esporta DOCX</a></li>
                         </ul>
                     </div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="editLesson(${lesson.id})" title="Modifica">
+                    <button class="btn btn-sm btn-outline-primary d-none d-md-inline-flex" onclick="editLesson(${lesson.id})" title="Modifica">
                         <i class="bi bi-pencil"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-success expand-chatgpt-btn" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Espandi con ChatGPT">
+                    <button class="btn btn-sm btn-outline-success expand-chatgpt-btn d-none d-md-inline-flex" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Espandi con ChatGPT">
                         <i class="bi bi-magic"></i> ChatGPT
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary version-history-btn" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Cronologia Versioni">
+                    <button class="btn btn-sm btn-outline-secondary version-history-btn d-none d-md-inline-flex" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Cronologia Versioni">
                         <i class="bi bi-clock-history"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-info collaboration-btn" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Note, Commenti e Promemoria">
+                    <button class="btn btn-sm btn-outline-info collaboration-btn d-none d-md-inline-flex" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}" title="Note, Commenti e Promemoria">
                         <i class="bi bi-chat-dots"></i>
                     </button>
-                    <button class="btn btn-sm btn-outline-danger delete-lesson-btn" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Elimina">
+                    <button class="btn btn-sm btn-outline-danger delete-lesson-btn d-none d-md-inline-flex" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}" title="Elimina">
                         <i class="bi bi-trash"></i>
                     </button>
+                    
+                    <!-- Dropdown mobile (visibile solo su schermi < md) -->
+                    <div class="btn-group d-md-none position-relative" role="group">
+                        <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-expanded="false" title="Azioni" id="lessonActionsDropdown-${lesson.id}">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="lessonActionsDropdown-${lesson.id}" style="z-index: 1050;">
+                            <li><a class="dropdown-item preview-lesson-btn" href="#" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}"><i class="bi bi-eye"></i> Anteprima</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item export-lesson-btn" href="#" data-lesson-id="${lesson.id}" data-format="pdf"><i class="bi bi-file-pdf"></i> Esporta PDF</a></li>
+                            <li><a class="dropdown-item export-lesson-btn" href="#" data-lesson-id="${lesson.id}" data-format="docx"><i class="bi bi-file-word"></i> Esporta DOCX</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="editLesson(${lesson.id}); return false;"><i class="bi bi-pencil"></i> Modifica</a></li>
+                            <li><a class="dropdown-item expand-chatgpt-btn" href="#" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}"><i class="bi bi-magic"></i> Espandi con ChatGPT</a></li>
+                            <li><a class="dropdown-item version-history-btn" href="#" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}"><i class="bi bi-clock-history"></i> Cronologia Versioni</a></li>
+                            <li><a class="dropdown-item collaboration-btn" href="#" data-lesson-id="${lesson.id}" data-course-id="${currentCourseId}"><i class="bi bi-chat-dots"></i> Note e Commenti</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item delete-lesson-btn text-danger" href="#" data-lesson-id="${lesson.id}" data-lesson-title="${(lesson.title || '').replace(/"/g, '&quot;')}"><i class="bi bi-trash"></i> Elimina</a></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
@@ -995,57 +1016,172 @@ function displayLessons(lessons) {
         });
     }
     
-    // Aggiungi event listener per i pulsanti ChatGPT
+    // Funzione helper per chiudere dropdown mobile e posizionarlo correttamente
+    function closeMobileDropdown(element) {
+        const dropdownMenu = element.closest('.dropdown-menu');
+        if (dropdownMenu) {
+            const dropdownToggle = dropdownMenu.previousElementSibling;
+            if (dropdownToggle) {
+                const bsDropdown = bootstrap.Dropdown.getInstance(dropdownToggle);
+                if (bsDropdown) {
+                    bsDropdown.hide();
+                }
+            }
+        }
+    }
+    
+    // Posiziona correttamente i dropdown su mobile evitando sovrapposizioni
+    function positionMobileDropdown(dropdownToggle) {
+        if (window.innerWidth < 768) {
+            const dropdownMenu = dropdownToggle.nextElementSibling;
+            if (dropdownMenu && dropdownMenu.classList.contains('dropdown-menu')) {
+                const rect = dropdownToggle.getBoundingClientRect();
+                const menuHeight = dropdownMenu.offsetHeight || 300; // Stima altezza menu
+                const viewportHeight = window.innerHeight;
+                const spaceBelow = viewportHeight - rect.bottom;
+                const spaceAbove = rect.top;
+                
+                // Se non c'è spazio sotto, posiziona sopra
+                if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+                    dropdownMenu.style.position = 'fixed';
+                    dropdownMenu.style.bottom = `${viewportHeight - rect.top + 5}px`;
+                    dropdownMenu.style.top = 'auto';
+                    dropdownMenu.style.right = '1rem';
+                    dropdownMenu.style.left = 'auto';
+                } else {
+                    // Posiziona sotto il pulsante
+                    dropdownMenu.style.position = 'fixed';
+                    dropdownMenu.style.top = `${rect.bottom + 5}px`;
+                    dropdownMenu.style.bottom = 'auto';
+                    dropdownMenu.style.right = '1rem';
+                    dropdownMenu.style.left = 'auto';
+                }
+                
+                dropdownMenu.style.zIndex = '99999';
+                dropdownMenu.style.maxHeight = `${Math.min(menuHeight, viewportHeight - 20)}px`;
+                dropdownMenu.style.overflowY = 'auto';
+                
+                // Assicura che il dropdown sia sopra tutto
+                const allDropdowns = document.querySelectorAll('.dropdown-menu');
+                allDropdowns.forEach(menu => {
+                    if (menu !== dropdownMenu && menu.classList.contains('show')) {
+                        menu.style.zIndex = '99998';
+                    }
+                });
+            }
+        }
+    }
+    
+    // Aggiungi listener per posizionare dropdown su mobile quando si apre
+    container.querySelectorAll('[data-bs-toggle="dropdown"]').forEach(toggle => {
+        toggle.addEventListener('show.bs.dropdown', function() {
+            if (window.innerWidth < 768) {
+                // Aggiungi margine alla lesson-item per evitare sovrapposizioni
+                const lessonItem = this.closest('.lesson-item');
+                if (lessonItem) {
+                    lessonItem.style.marginBottom = '20rem';
+                    lessonItem.style.zIndex = '99998';
+                }
+                // Chiudi altri dropdown aperti
+                const allDropdowns = document.querySelectorAll('.dropdown-menu.show');
+                allDropdowns.forEach(menu => {
+                    const toggleBtn = menu.previousElementSibling;
+                    if (toggleBtn && toggleBtn !== this) {
+                        const bsDropdown = bootstrap.Dropdown.getInstance(toggleBtn);
+                        if (bsDropdown) bsDropdown.hide();
+                    }
+                });
+                // Posiziona prima che si apra per evitare flickering
+                setTimeout(() => positionMobileDropdown(this), 10);
+            }
+        });
+        
+        toggle.addEventListener('shown.bs.dropdown', function() {
+            if (window.innerWidth < 768) {
+                positionMobileDropdown(this);
+                // Scrolla se necessario per vedere il dropdown
+                const dropdownMenu = this.nextElementSibling;
+                if (dropdownMenu && dropdownMenu.classList.contains('dropdown-menu')) {
+                    const rect = dropdownMenu.getBoundingClientRect();
+                    if (rect.bottom > window.innerHeight) {
+                        dropdownMenu.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }
+            }
+        });
+        
+        toggle.addEventListener('hidden.bs.dropdown', function() {
+            // Rimuovi margine extra e z-index quando si chiude
+            const lessonItem = this.closest('.lesson-item');
+            if (lessonItem) {
+                lessonItem.style.marginBottom = '';
+                lessonItem.style.zIndex = '';
+            }
+        });
+    });
+    
+    // Aggiungi event listener per i pulsanti ChatGPT (sia desktop che mobile dropdown)
     container.querySelectorAll('.expand-chatgpt-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             const lessonId = parseInt(this.getAttribute('data-lesson-id'));
             const lessonTitle = this.getAttribute('data-lesson-title');
             expandLessonWithChatGPT(lessonId, lessonTitle, this);
+            closeMobileDropdown(this);
         });
     });
     
-    // Aggiungi event listener per i pulsanti Anteprima
+    // Aggiungi event listener per i pulsanti Anteprima (sia desktop che mobile dropdown)
     container.querySelectorAll('.preview-lesson-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             const lessonId = parseInt(this.getAttribute('data-lesson-id'));
             showLessonPreview(lessonId);
+            closeMobileDropdown(this);
         });
     });
     
-    // Aggiungi event listener per i pulsanti Esporta
+    // Aggiungi event listener per i pulsanti Esporta (sia desktop che mobile dropdown)
     container.querySelectorAll('.export-lesson-btn').forEach(btn => {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             const lessonId = parseInt(this.getAttribute('data-lesson-id'));
             const format = this.getAttribute('data-format');
             exportLesson(lessonId, format);
+            closeMobileDropdown(this);
         });
     });
     
-    // Aggiungi event listener per i pulsanti Elimina Lezione
+    // Aggiungi event listener per i pulsanti Elimina Lezione (sia desktop che mobile dropdown)
     container.querySelectorAll('.delete-lesson-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             const lessonId = parseInt(this.getAttribute('data-lesson-id'));
             const lessonTitle = this.getAttribute('data-lesson-title');
             deleteLesson(lessonId, lessonTitle);
+            closeMobileDropdown(this);
         });
     });
     
-    // Aggiungi event listener per i pulsanti Cronologia Versioni
+    // Aggiungi event listener per i pulsanti Cronologia Versioni (sia desktop che mobile dropdown)
     container.querySelectorAll('.version-history-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             const lessonId = parseInt(this.getAttribute('data-lesson-id'));
             const courseId = parseInt(this.getAttribute('data-course-id'));
             showVersionHistory(courseId, lessonId);
+            closeMobileDropdown(this);
         });
     });
     
-    // Aggiungi event listener per i pulsanti Collaborazione
+    // Aggiungi event listener per i pulsanti Collaborazione (sia desktop che mobile dropdown)
     container.querySelectorAll('.collaboration-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
             const lessonId = parseInt(this.getAttribute('data-lesson-id'));
             const courseId = parseInt(this.getAttribute('data-course-id'));
             showCollaborationModal(courseId, lessonId);
+            closeMobileDropdown(this);
         });
     });
 }
@@ -5122,6 +5258,17 @@ function goBackToPreviousTab() {
     } else {
         // Default al tab Generale
         document.getElementById('general-tab').click();
+    }
+}
+
+// Chiudi menu mobile dopo click
+function closeMobileMenu() {
+    const navbarCollapse = document.getElementById('navbarMobileMenu');
+    if (navbarCollapse && navbarCollapse.classList.contains('show')) {
+        const bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse);
+        if (bsCollapse) {
+            bsCollapse.hide();
+        }
     }
 }
 

@@ -244,13 +244,20 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 ## 📱 Mobile e Responsive
 
 ### App Mobile
-- [ ] App mobile nativa (iOS/Android)
-- [ ] PWA (Progressive Web App)
+
+- [x] PWA (Progressive Web App) - Manifest.json, meta tags iOS, installabile
+- [x] Responsività modali e interfaccia mobile
+- [x] Versione mobile-optimized completa del gestionale
+- [x] Menu hamburger per navigazione mobile
+- [x] Touch-friendly (target minimo 44x44px)
+- [x] Ottimizzazioni form e input per mobile (font-size 16px per prevenire zoom iOS)
+- [x] Dashboard responsive (2x2 su mobile)
+- [x] Griglie card corsi ottimizzate (1 colonna su mobile)
 - [ ] Sincronizzazione offline
 - [ ] Notifiche push mobile
 
 **Priorità:** Bassa  
-**Stato:** Proposta
+**Stato:** ✅ Completato (2025-11-19) - Versione mobile completa implementata
 
 ---
 
@@ -291,6 +298,7 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - ✅ Analisi e Suggerimenti AI: bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti
 - ✅ Validazione Contenuti: controllo completezza lezioni, verifica obiettivi/materiali/esercizi, alert per lezioni incomplete, validazione formattazione Markdown
 - ✅ Backup e Restore: tab "Backup" nelle preferenze, creazione backup JSON completo (corsi, lezioni, preferenze), ripristino backup con opzioni selettive, cronologia backup con rotazione automatica, impostazioni backup automatico (frequenza giornaliera/settimanale/mensile, numero backup da mantenere)
+- ✅ Responsività Mobile: stili CSS responsive per modali (modal-dialog, modal-body, modal-footer), ottimizzazione per schermi < 768px e < 576px, tab navigation responsive, form con font-size 16px per prevenire zoom iOS, button groups responsive, PWA base con manifest.json e meta tags iOS, menu hamburger per navigazione mobile, touch-friendly (target minimo 44x44px), dashboard responsive (2x2 su mobile), griglie card corsi ottimizzate (1 colonna su mobile), ottimizzazioni complete per tutti i componenti (tabelle, dropdown, toast, progress bar, spinner, text, lista lezioni, search panel)
 
 ### In Sviluppo
 - Nessuna al momento
@@ -314,6 +322,8 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 - **2025-11-19**: Implementate Analisi e Suggerimenti AI: pulsante "Analisi AI" nelle card corsi, modale con 4 tipi di analisi (bilanciamento teoria/pratica, suggerimenti miglioramento, rilevamento duplicati, coerenza obiettivi-contenuti), endpoint backend `/api/courses/<id>/ai-analysis/<type>` che usa ChatGPT per analizzare il corso e fornire raccomandazioni, sistema di salvataggio analisi con tab "Analisi Salvate" e download diretto PDF/DOCX
 - **2025-11-19**: Implementata Validazione Contenuti: pulsante "Valida Contenuti" nella gestione lezioni, modale con dashboard statistiche (lezioni totali, complete, incomplete, con errori), controllo completezza (titolo, descrizione, contenuto), verifica presenza obiettivi/materiali/esercizi, validazione formattazione Markdown (titoli, liste, grassetto), alert visivi con badge colorati per ogni lezione
 - **2025-11-19 19:02**: Implementato Backup e Restore: tab "Backup" nelle preferenze con sezioni "Crea Backup", "Ripristina Backup", "Cronologia Backup" e "Impostazioni Backup Automatico". Endpoint backend `/api/backup/create` per creare backup JSON completo, `/api/backup/restore` per ripristinare con opzioni selettive, `/api/backup/list` per cronologia, `/api/backup/download/<filename>` per download. Rotazione automatica backup basata su preferenze. Interfaccia con pulsante "Indietro" per tornare al tab precedente.
+- **2025-11-19**: Implementata Responsività Mobile e PWA: aggiunti stili CSS responsive per tutte le modali (max-width calc(100% - 1rem) su mobile, flex layout per modal-content, padding ridotti, font-size 16px per form su iOS), manifest.json per PWA con icone e shortcuts, meta tags per iOS (apple-mobile-web-app-capable, mobile-web-app-capable, theme-color), ottimizzazione tab navigation, button groups e form per schermi piccoli. Tutte le modali ora sono fruibili su dispositivi mobili.
+- **2025-11-19**: Implementata Versione Mobile-Optimized Completa: menu hamburger nella navbar con collapse Bootstrap per schermi < 992px, tutti i bottoni e elementi interattivi con target minimo 44x44px per touch-friendly, dashboard cards responsive (2x2 su mobile con testi abbreviati), griglie card corsi ottimizzate (col-12 su mobile, col-sm-6 su tablet), ottimizzazioni complete per form (font-size 16px), tabelle, dropdown, toast, progress bar, spinner, lista lezioni, search panel. Funzione JavaScript `closeMobileMenu()` per chiudere automaticamente il menu dopo click. Tutto il gestionale è ora completamente fruibile e ottimizzato per dispositivi mobili.
 
 ---
 
@@ -330,5 +340,5 @@ Documento per tracciare le funzionalità proposte, in sviluppo e completate.
 
 ---
 
-*Ultimo aggiornamento: 2025-11-19 19:02 (Backup e Restore)*
+*Ultimo aggiornamento: 2025-11-19 (Versione Mobile-Optimized Completa)*
 
