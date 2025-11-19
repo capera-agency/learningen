@@ -838,19 +838,48 @@ def create_course_from_md():
 
 @app.route('/api/courses', methods=['POST'])
 def create_course():
-    data = request.json
-    course = Course(
-        code=data['code'],
-        name=data['name'],
-        description=data.get('description', ''),
-        total_hours=data['total_hours'],
-        theory_hours=data['theory_hours'],
-        practice_hours=data['practice_hours'],
-        num_lessons=data.get('num_lessons', 0)
-    )
-    db.session.add(course)
-    db.session.commit()
-    return jsonify({'id': course.id, 'message': 'Corso creato con successo'}), 201
+    try:
+        # Verifica che il database sia inizializzato
+        try:
+            # Prova una query semplice per verificare che il database funzioni
+            Course.query.limit(1).all()
+        except Exception as db_error:
+            # Se il database non esiste, inizializzalo
+            error_str = str(db_error)
+            if 'no such table' in error_str.lower() or 'operationalerror' in error_str.lower():
+                logger.warning(f"Database non inizializzato in create_course, inizializzazione in corso... Errore: {db_error}")
+                try:
+                    init_database()
+                    logger.info("Database inizializzato con successo in create_course")
+                except Exception as init_error:
+                    logger.error(f"Errore durante inizializzazione database in create_course: {init_error}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    return jsonify({'error': f'Database non inizializzato: {str(init_error)}'}), 500
+            else:
+                # Altro tipo di errore, rilancia
+                raise
+        
+        data = request.json
+        course = Course(
+            code=data['code'],
+            name=data['name'],
+            description=data.get('description', ''),
+            total_hours=data['total_hours'],
+            theory_hours=data['theory_hours'],
+            practice_hours=data['practice_hours'],
+            num_lessons=data.get('num_lessons', 0)
+        )
+        db.session.add(course)
+        db.session.commit()
+        return jsonify({'id': course.id, 'message': 'Corso creato con successo'}), 201
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        error_msg = f"Errore durante la creazione del corso: {str(e)}"
+        logger.error(error_msg)
+        logger.error(traceback.format_exc())
+        return jsonify({'error': error_msg}), 500
 
 @app.route('/api/courses/<int:course_id>', methods=['GET'])
 def get_course(course_id):
